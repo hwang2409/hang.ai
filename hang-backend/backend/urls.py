@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from backend.routers import router
 from notes.views import UploadImageView, ServeImageView
+from backend.health import health_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,6 +27,8 @@ urlpatterns = [
     path('api/auth/', include('accounts.urls')),
     path('api/upload/', UploadImageView.as_view(), name='upload-image'),
     path('api/images/<uuid:image_id>/', ServeImageView.as_view(), name='serve-image'),
+    path('health/', health_check, name='health-check'),
+    path('', health_check, name='root-health-check'),  # Root path for Railway healthcheck
 ]
 
 if settings.DEBUG:
