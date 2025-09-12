@@ -387,125 +387,126 @@ export default function Home() {
       )}
 
       <div className="notes-grid">
-        {notes.length === 0 && !loading ? (
+        {/* Folders (filtered by context) - Always show if they exist */}
+        {folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).map((folder) => (
+          <div key={`folder-${folder.id}`} 
+               className={`note-card ${dragOverFolder === folder.id ? 'drag-over' : ''}`}
+               onClick={() => setActiveFolder(folder.id)}
+               onDragOver={(e) => {
+                 e.preventDefault();
+                 setDragOverFolder(folder.id);
+               }}
+               onDragLeave={() => setDragOverFolder(null)}
+               onDrop={(e) => {
+                 setDragOverFolder(null);
+                 const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
+                 if (!raw) return;
+                 let noteId = raw.trim();
+                 try {
+                   const url = new URL(noteId);
+                   const parts = url.pathname.split('/').filter(Boolean);
+                   noteId = parts[parts.length - 1] || noteId;
+                 } catch (_) {
+                   if (noteId.includes('/')) {
+                     const parts = noteId.split('/').filter(Boolean);
+                     noteId = parts[parts.length - 1];
+                   }
+                 }
+                 if (noteId) moveNoteToFolder(noteId, folder.id);
+               }}>
+            <h2 className="note-title">📁 {folder.name}</h2>
+            <div className="note-meta">
+              <span className="note-date">Folder</span>
+              <div className="note-actions">
+                <button className="note-action-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteFolder(folder.id); }}>Delete</button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Notes (filtered by folder context) */}
+        {notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder)).map((note) => (
+          <Link key={note.id} href={`/notes/${note.unique_id}`} className="note-card-link">
+            <div className="note-card" draggable
+                 onDragStart={(e) => {
+                   e.dataTransfer.setData('application/x-note-id', note.unique_id);
+                   e.dataTransfer.setData('text/plain', note.unique_id);
+                 }}>
+              {(() => {
+                const img = getFirstImage(note.content || '');
+                if (img) {
+                  return (
+                    <div className="note-card-media note-card-media-image">
+                      <img src={img.src} alt={img.alt} />
+                    </div>
+                  );
+                }
+                // No image — show a blank spacer to keep uniform height
+                return (
+                  <div className="note-card-media note-card-media-blank" aria-hidden="true" />
+                );
+              })()}
+
+              <h2 className="note-title">{note.title}</h2>
+              
+              {/* Tags */}
+              {note.tags && note.tags.length > 0 && (
+                <div className="note-tags">
+                  {note.tags.slice(0, 3).map(tag => (
+                    <span 
+                      key={tag.id} 
+                      className="note-tag"
+                      style={{ backgroundColor: tag.color }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                  {note.tags.length > 3 && (
+                    <span className="note-tag-more">
+                      +{note.tags.length - 3} more
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              <div className="note-meta">
+                <span className="note-date">{getDate(note.created_at)}</span>
+                <div className="note-actions">
+                  <button 
+                    className="note-action-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Edit functionality will be handled on detail page
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    className="note-action-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDeleteNote(note.unique_id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
+
+        {/* Empty state - only show when there are no folders AND no notes */}
+        {folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).length === 0 && 
+         notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder)).length === 0 && 
+         !loading && (
           <div className="notes-empty">
             <div className="notes-empty-icon">📝</div>
             <h3 className="notes-empty-title">No notes yet</h3>
             <p className="notes-empty-text">Create your first note to get started!</p>
           </div>
-        ) : (
-          <>
-          {/* Folders (filtered by context) */}
-          {folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).map((folder) => (
-            <div key={`folder-${folder.id}`} 
-                 className={`note-card ${dragOverFolder === folder.id ? 'drag-over' : ''}`}
-                 onClick={() => setActiveFolder(folder.id)}
-                 onDragOver={(e) => {
-                   e.preventDefault();
-                   setDragOverFolder(folder.id);
-                 }}
-                 onDragLeave={() => setDragOverFolder(null)}
-                 onDrop={(e) => {
-                   setDragOverFolder(null);
-                   const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
-                   if (!raw) return;
-                   let noteId = raw.trim();
-                   try {
-                     const url = new URL(noteId);
-                     const parts = url.pathname.split('/').filter(Boolean);
-                     noteId = parts[parts.length - 1] || noteId;
-                   } catch (_) {
-                     if (noteId.includes('/')) {
-                       const parts = noteId.split('/').filter(Boolean);
-                       noteId = parts[parts.length - 1];
-                     }
-                   }
-                   if (noteId) moveNoteToFolder(noteId, folder.id);
-                 }}>
-              <h2 className="note-title">📁 {folder.name}</h2>
-              <div className="note-meta">
-                <span className="note-date">Folder</span>
-                <div className="note-actions">
-                  <button className="note-action-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteFolder(folder.id); }}>Delete</button>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Notes (filtered by folder context) */}
-          {notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder)).map((note) => (
-            <Link key={note.id} href={`/notes/${note.unique_id}`} className="note-card-link">
-              <div className="note-card" draggable
-                   onDragStart={(e) => {
-                     e.dataTransfer.setData('application/x-note-id', note.unique_id);
-                     e.dataTransfer.setData('text/plain', note.unique_id);
-                   }}>
-                {(() => {
-                  const img = getFirstImage(note.content || '');
-                  if (img) {
-                    return (
-                      <div className="note-card-media note-card-media-image">
-                        <img src={img.src} alt={img.alt} />
-                      </div>
-                    );
-                  }
-                  // No image — show a blank spacer to keep uniform height
-                  return (
-                    <div className="note-card-media note-card-media-blank" aria-hidden="true" />
-                  );
-                })()}
-
-                <h2 className="note-title">{note.title}</h2>
-                
-                {/* Tags */}
-                {note.tags && note.tags.length > 0 && (
-                  <div className="note-tags">
-                    {note.tags.slice(0, 3).map(tag => (
-                      <span 
-                        key={tag.id} 
-                        className="note-tag"
-                        style={{ backgroundColor: tag.color }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                    {note.tags.length > 3 && (
-                      <span className="note-tag-more">
-                        +{note.tags.length - 3} more
-                      </span>
-                    )}
-                  </div>
-                )}
-                
-                <div className="note-meta">
-                  <span className="note-date">{getDate(note.created_at)}</span>
-                  <div className="note-actions">
-                    <button 
-                      className="note-action-btn"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Edit functionality will be handled on detail page
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      className="note-action-btn"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteNote(note.unique_id);
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
-          </>
         )}
       </div>
     </div>
