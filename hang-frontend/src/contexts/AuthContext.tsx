@@ -34,7 +34,20 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
+// Function to get the correct API base URL
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'hangai-six.vercel.app') {
+      return 'https://hangai-production.up.railway.app/api';
+    }
+  }
+  
+  return 'http://localhost:8000/api';
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -55,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserProfile = async (authToken: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/profile/`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/profile/`, {
         headers: {
           'Authorization': `Token ${authToken}`,
           'Content-Type': 'application/json',
@@ -81,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login/`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (userData: RegisterData): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register/`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/register/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     if (token) {
       // Call logout endpoint to invalidate token on server
-      fetch(`${API_BASE_URL}/auth/logout/`, {
+      fetch(`${getApiBaseUrl()}/auth/logout/`, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,

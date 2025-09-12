@@ -34,12 +34,23 @@ interface Folder {
 }
 
 // API functions
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
-
-console.log(API_BASE_URL);
+// Function to get the correct API base URL
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'hangai-six.vercel.app') {
+      return 'https://hangai-production.up.railway.app/api';
+    }
+  }
+  
+  return 'http://localhost:8000/api';
+};
 
 const fetchNotes = async (token: string | null): Promise<Note[]> => {
-  const response = await fetch(`${API_BASE_URL}/documents/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/`, {
     headers: getAuthHeaders(token),
   });
   if (!response.ok) {
@@ -49,7 +60,7 @@ const fetchNotes = async (token: string | null): Promise<Note[]> => {
 };
 
 const createFolder = async (payload: { name: string; parent_folder?: number | null }, token: string | null): Promise<Folder> => {
-  const response = await fetch(`${API_BASE_URL}/folders/`, {
+  const response = await fetch(`${getApiBaseUrl()}/folders/`, {
     method: 'POST',
     headers: getAuthHeaders(token),
     body: JSON.stringify(payload),
@@ -59,7 +70,7 @@ const createFolder = async (payload: { name: string; parent_folder?: number | nu
 };
 
 const createNote = async (note: { title: string; content: string }, token: string | null): Promise<Note> => {
-  const response = await fetch(`${API_BASE_URL}/documents/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/`, {
     method: 'POST',
     headers: getAuthHeaders(token),
     body: JSON.stringify(note),
@@ -71,7 +82,7 @@ const createNote = async (note: { title: string; content: string }, token: strin
 };
 
 const deleteNote = async (uniqueId: string, token: string | null): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/${uniqueId}/`, {
     method: 'DELETE',
     headers: getAuthHeaders(token),
   });
@@ -127,7 +138,7 @@ export default function Home() {
     // Ensure leading slash
     const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     // Prefix backend origin
-    return `${API_BASE_URL}${withSlash}`;
+    return `${getApiBaseUrl()}${withSlash}`;
   };
 
   const getFirstLines = (text: string, maxLines: number): string[] => {
@@ -246,7 +257,7 @@ export default function Home() {
         setLoading(true);
         const [fetchedNotes, fetchedFolders] = await Promise.all([
           fetchNotes(token),
-          fetch(`${API_BASE_URL}/folders/`, {
+          fetch(`${getApiBaseUrl()}/folders/`, {
             headers: getAuthHeaders(token),
           }).then(r => r.json())
         ]);
@@ -336,7 +347,7 @@ export default function Home() {
         }
       }
 
-      const res = await fetch(`${API_BASE_URL}/documents/${id}/`, {
+      const res = await fetch(`${getApiBaseUrl()}/documents/${id}/`, {
         method: 'PATCH',
         headers: getAuthHeaders(token),
         body: JSON.stringify({ folder: folderId })
@@ -363,7 +374,7 @@ export default function Home() {
       message: 'Move this folder to trash? All notes inside will also be moved to trash. You can restore them later.',
       onConfirm: async () => {
         try {
-          const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
+          const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/`, { 
             method: 'DELETE',
             headers: getAuthHeaders(token),
           });
@@ -440,7 +451,7 @@ export default function Home() {
   const moveFolderToTrash = async (folderId: number) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
+      const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/`, { 
         method: 'DELETE',
         headers: getAuthHeaders(token),
       });
@@ -478,7 +489,7 @@ export default function Home() {
   const moveFolderToFolder = async (folderId: number, targetFolderId: number | null) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/move_to_folder/`, {
+      const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/move_to_folder/`, {
         method: 'POST',
         headers: {
           ...getAuthHeaders(token),
@@ -825,7 +836,7 @@ export default function Home() {
               setNewFolder({ name: '' });
               setShowFolderForm(false);
               // Refresh folders list
-              const fetchedFolders = await fetch(`${API_BASE_URL}/folders/`, {
+              const fetchedFolders = await fetch(`${getApiBaseUrl()}/folders/`, {
                 headers: getAuthHeaders(token),
               }).then(r => r.json());
               setFolders(fetchedFolders);

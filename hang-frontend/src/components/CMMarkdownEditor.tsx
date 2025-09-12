@@ -418,7 +418,21 @@ class ImageWidget extends WidgetType {
     
     const img = document.createElement('img');
     // Ensure image URLs point to the backend server
-    const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api'))?.replace('/api', '') || 'http://localhost:8000';
+    // Function to get the correct API base URL
+    const getApiBaseUrl = (): string => {
+      if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+        return process.env.NEXT_PUBLIC_API_BASE_URL;
+      }
+      
+      if (typeof window !== 'undefined') {
+        if (window.location.hostname === 'hangai-six.vercel.app') {
+          return 'https://hangai-production.up.railway.app/api';
+        }
+      }
+      
+      return 'http://localhost:8000/api';
+    };
+    const baseUrl = getApiBaseUrl().replace('/api', '') || 'http://localhost:8000';
     img.src = this.src.startsWith('http') ? this.src : `${baseUrl}${this.src}`;
     img.alt = this.alt;
     img.draggable = true;
@@ -1186,8 +1200,21 @@ async function uploadImage(file: File, token: string | null): Promise<string> {
     headers['Authorization'] = `Token ${token}`;
   }
   
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
-  const res = await fetch(`${API_BASE_URL}/upload/`, {
+  // Function to get the correct API base URL
+  const getApiBaseUrl = (): string => {
+    if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+      return process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
+    
+    if (typeof window !== 'undefined') {
+      if (window.location.hostname === 'hangai-six.vercel.app') {
+        return 'https://hangai-production.up.railway.app/api';
+      }
+    }
+    
+    return 'http://localhost:8000/api';
+  };
+  const res = await fetch(`${getApiBaseUrl()}/upload/`, {
     method: 'POST',
     headers,
     body: form,

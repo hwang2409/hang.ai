@@ -5,7 +5,20 @@ import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAuthHeaders } from '../../contexts/AuthContext';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
+// Function to get the correct API base URL
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'hangai-six.vercel.app') {
+      return 'https://hangai-production.up.railway.app/api';
+    }
+  }
+  
+  return 'http://localhost:8000/api';
+};
 
 interface Note {
   id: number;
@@ -61,10 +74,10 @@ export default function TrashPage() {
       try {
         setLoading(true);
         const [notesRes, foldersRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/documents/trash/`, {
+          fetch(`${getApiBaseUrl()}/documents/trash/`, {
             headers: getAuthHeaders(token),
           }),
-          fetch(`${API_BASE_URL}/folders/trash/`, {
+          fetch(`${getApiBaseUrl()}/folders/trash/`, {
             headers: getAuthHeaders(token),
           })
         ]);
@@ -95,7 +108,7 @@ export default function TrashPage() {
   const restoreNote = async (uniqueId: string) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/documents/${uniqueId}/restore/`, {
+      const res = await fetch(`${getApiBaseUrl()}/documents/${uniqueId}/restore/`, {
         method: 'POST',
         headers: getAuthHeaders(token),
       });
@@ -115,7 +128,7 @@ export default function TrashPage() {
   const permanentDeleteNote = async (uniqueId: string) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/documents/${uniqueId}/permanent_delete/`, {
+      const res = await fetch(`${getApiBaseUrl()}/documents/${uniqueId}/permanent_delete/`, {
         method: 'DELETE',
         headers: getAuthHeaders(token),
       });
@@ -135,7 +148,7 @@ export default function TrashPage() {
   const restoreFolder = async (folderId: number) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/restore/`, {
+      const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/restore/`, {
         method: 'POST',
         headers: getAuthHeaders(token),
       });
@@ -155,7 +168,7 @@ export default function TrashPage() {
   const permanentDeleteFolder = async (folderId: number) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/permanent_delete/`, {
+      const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/permanent_delete/`, {
         method: 'DELETE',
         headers: getAuthHeaders(token),
       });

@@ -28,10 +28,23 @@ interface Note {
 }
 
 // API functions
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
+// Function to get the correct API base URL
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'hangai-six.vercel.app') {
+      return 'https://hangai-production.up.railway.app/api';
+    }
+  }
+  
+  return 'http://localhost:8000/api';
+};
 
 const fetchNote = async (id: string, token: string | null): Promise<Note> => {
-  const response = await fetch(`${API_BASE_URL}/documents/${id}/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/${id}/`, {
     headers: getAuthHeaders(token),
   });
   if (!response.ok) {
@@ -41,7 +54,7 @@ const fetchNote = async (id: string, token: string | null): Promise<Note> => {
 };
 
 const updateNote = async (uniqueId: string, note: { title?: string; content?: string; tag_ids?: number[] }, token: string | null): Promise<Note> => {
-  const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/${uniqueId}/`, {
     method: 'PATCH',
     headers: {
       ...getAuthHeaders(token),
@@ -57,7 +70,7 @@ const updateNote = async (uniqueId: string, note: { title?: string; content?: st
 };
 
 const fetchTags = async (token: string | null): Promise<Tag[]> => {
-  const response = await fetch(`${API_BASE_URL}/tags/`, {
+  const response = await fetch(`${getApiBaseUrl()}/tags/`, {
     headers: getAuthHeaders(token),
   });
   if (!response.ok) {
@@ -67,7 +80,7 @@ const fetchTags = async (token: string | null): Promise<Tag[]> => {
 };
 
 const createTag = async (name: string, color: string = '#3b82f6', token: string | null): Promise<Tag> => {
-  const response = await fetch(`${API_BASE_URL}/tags/`, {
+  const response = await fetch(`${getApiBaseUrl()}/tags/`, {
     method: 'POST',
     headers: getAuthHeaders(token),
     body: JSON.stringify({ name, color }),
@@ -79,7 +92,7 @@ const createTag = async (name: string, color: string = '#3b82f6', token: string 
 };
 
 const deleteNote = async (uniqueId: string, token: string | null): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
+  const response = await fetch(`${getApiBaseUrl()}/documents/${uniqueId}/`, {
     method: 'DELETE',
     headers: getAuthHeaders(token),
   });
