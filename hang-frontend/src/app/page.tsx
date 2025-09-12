@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { useAuth } from '../contexts/AuthContext';
@@ -165,6 +165,72 @@ export default function Home() {
   const [newFolder, setNewFolder] = useState({ name: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'updated_desc' | 'updated_asc' | 'title_asc' | 'title_desc' | 'tag_asc' | 'tag_desc'>('newest');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [newDropdownOpen, setNewDropdownOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'note' | 'folder';
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'note'
+  });
+  const [dragOverTrash, setDragOverTrash] = useState(false);
+
+  // Derived, memoized notes list filtered by folder and sorted by selection
+  const visibleSortedNotes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filteredByFolder = notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder));
+    const filteredBySearch = q
+      ? filteredByFolder.filter(n => {
+          const titleMatch = (n.title || '').toLowerCase().includes(q);
+          const tagMatch = (n.tags || []).some(t => (t.name || '').toLowerCase().includes(q));
+          return titleMatch || tagMatch;
+        })
+      : filteredByFolder;
+    const sorted = [...filteredBySearch].sort((a, b) => {
+      const aCreated = new Date(a.created_at).getTime();
+      const bCreated = new Date(b.created_at).getTime();
+      const aUpdated = new Date(a.updated_at).getTime();
+      const bUpdated = new Date(b.updated_at).getTime();
+      const aTitle = (a.title || '').toLowerCase();
+      const bTitle = (b.title || '').toLowerCase();
+      const aTag = (a.tags && a.tags[0]?.name ? a.tags[0].name.toLowerCase() : '');
+      const bTag = (b.tags && b.tags[0]?.name ? b.tags[0].name.toLowerCase() : '');
+      switch (sortBy) {
+        case 'newest':
+          return bCreated - aCreated;
+        case 'oldest':
+          return aCreated - bCreated;
+        case 'updated_desc':
+          return bUpdated - aUpdated;
+        case 'updated_asc':
+          return aUpdated - bUpdated;
+        case 'title_asc':
+          return aTitle.localeCompare(bTitle);
+        case 'title_desc':
+          return bTitle.localeCompare(aTitle);
+        case 'tag_asc':
+          if (!aTag && bTag) return 1;
+          if (aTag && !bTag) return -1;
+          return aTag.localeCompare(bTag);
+        case 'tag_desc':
+          if (!aTag && bTag) return 1;
+          if (aTag && !bTag) return -1;
+          return bTag.localeCompare(aTag);
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [notes, activeFolder, sortBy, searchQuery]);
 
   // Load notes from API on component mount
   useEffect(() => {
@@ -206,6 +272,26 @@ export default function Home() {
 
     loadNotes();
   }, [isAuthenticated, token]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownOpen) {
+        setDropdownOpen(false);
+      }
+      if (newDropdownOpen) {
+        setNewDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen || newDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [dropdownOpen, newDropdownOpen]);
 
   // Add note function
   const addNote = async () => {
@@ -269,32 +355,150 @@ export default function Home() {
   // Delete folder
   const deleteFolder = async (folderId: number) => {
     if (!token) return;
-    if (!confirm('Delete this folder? Notes inside will not be deleted.')) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
-        method: 'DELETE',
-        headers: getAuthHeaders(token),
-      });
-      if (!res.ok) throw new Error('Failed to delete folder');
-      setFolders(prev => prev.filter(f => f.id !== folderId));
-      // Notes pointing to this folder will show up as uncategorized after backend SET_NULL
-      setNotes(prev => prev.map(n => (n.folder === folderId ? { ...n, folder: null } : n)));
-    } catch (e) {
-      console.error(e);
-      setError('Failed to delete folder.');
-    }
+    setConfirmModal({
+      show: true,
+      title: 'Move to Trash',
+      message: 'Move this folder to trash? All notes inside will also be moved to trash. You can restore them later.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
+            method: 'DELETE',
+            headers: getAuthHeaders(token),
+          });
+          if (!res.ok) throw new Error('Failed to delete folder');
+          // Remove the folder and all its subfolders
+          const removeFolderAndSubfolders = (folderId: number, folders: any[]) => {
+            const folderIdsToRemove = new Set([folderId]);
+            
+            // Find all subfolders recursively
+            const findSubfolders = (parentId: number) => {
+              folders.forEach(folder => {
+                if (folder.parent_folder === parentId) {
+                  folderIdsToRemove.add(folder.id);
+                  findSubfolders(folder.id);
+                }
+              });
+            };
+            
+            findSubfolders(folderId);
+            return Array.from(folderIdsToRemove);
+          };
+          
+          const folderIdsToRemove = removeFolderAndSubfolders(folderId, folders);
+          setFolders(prev => prev.filter(f => !folderIdsToRemove.includes(f.id)));
+          // Remove all notes that were in any of the deleted folders
+          setNotes(prev => prev.filter(n => !folderIdsToRemove.includes(n.folder)));
+        } catch (e) {
+          console.error(e);
+          setError('Failed to delete folder.');
+        }
+        setConfirmModal(prev => ({ ...prev, show: false }));
+      },
+      type: 'folder'
+    });
   };
 
   // Delete note function
   const handleDeleteNote = async (uniqueId: string) => {
+    if (!token) return;
+    const note = notes.find(n => n.unique_id === uniqueId);
+    setConfirmModal({
+      show: true,
+      title: 'Move to Trash',
+      message: `Move "${note?.title || 'this note'}" to trash? You can restore it later.`,
+      onConfirm: async () => {
+        try {
+          await deleteNote(uniqueId, token);
+          setNotes(notes.filter(note => note.unique_id !== uniqueId));
+          setError(null);
+        } catch (err) {
+          setError('Failed to delete note. Please try again.');
+          console.error('Error deleting note:', err);
+        }
+        setConfirmModal(prev => ({ ...prev, show: false }));
+      },
+      type: 'note'
+    });
+  };
+
+  // Move note to trash (for drag and drop)
+  const moveNoteToTrash = async (uniqueId: string) => {
     if (!token) return;
     try {
       await deleteNote(uniqueId, token);
       setNotes(notes.filter(note => note.unique_id !== uniqueId));
       setError(null);
     } catch (err) {
-      setError('Failed to delete note. Please try again.');
-      console.error('Error deleting note:', err);
+      setError('Failed to move note to trash.');
+      console.error('Error moving note to trash:', err);
+    }
+  };
+
+  // Move folder to trash (for drag and drop)
+  const moveFolderToTrash = async (folderId: number) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
+        method: 'DELETE',
+        headers: getAuthHeaders(token),
+      });
+      if (!res.ok) throw new Error('Failed to move folder to trash');
+      
+      // Remove the folder and all its subfolders
+      const removeFolderAndSubfolders = (folderId: number, folders: any[]) => {
+        const folderIdsToRemove = new Set([folderId]);
+        
+        // Find all subfolders recursively
+        const findSubfolders = (parentId: number) => {
+          folders.forEach(folder => {
+            if (folder.parent_folder === parentId) {
+              folderIdsToRemove.add(folder.id);
+              findSubfolders(folder.id);
+            }
+          });
+        };
+        
+        findSubfolders(folderId);
+        return Array.from(folderIdsToRemove);
+      };
+      
+      const folderIdsToRemove = removeFolderAndSubfolders(folderId, folders);
+      setFolders(prev => prev.filter(f => !folderIdsToRemove.includes(f.id)));
+      // Remove all notes that were in any of the deleted folders
+      setNotes(prev => prev.filter(n => !folderIdsToRemove.includes(n.folder)));
+    } catch (e) {
+      console.error(e);
+      setError('Failed to move folder to trash.');
+    }
+  };
+
+  // Move folder into another folder (nesting)
+  const moveFolderToFolder = async (folderId: number, targetFolderId: number | null) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/move_to_folder/`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ target_folder_id: targetFolderId }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to move folder');
+      }
+      
+      // Update the folder in the local state
+      setFolders(prev => prev.map(f => 
+        f.id === folderId ? { ...f, parent_folder: targetFolderId } : f
+      ));
+      
+      setError(null);
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : 'Failed to move folder.');
     }
   };
 
@@ -315,7 +519,7 @@ export default function Home() {
 
   // Show authentication screen if not logged in
   if (!isAuthenticated) {
-    return (
+  return (
       <div className="notes-container">
         <header className="notes-header">
           <div className="header-left">
@@ -390,12 +594,116 @@ export default function Home() {
       </header>
 
       <div className="notes-actions-row">
-        <button 
-          className="add-note-btn"
-          onClick={() => setShowChooser(true)}
-        >
-          + new
-        </button>
+        {/* Search bar on the left */}
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search notes by title or tag..."
+          className="form-input"
+          style={{ flex: 1, marginRight: '1rem' }}
+        />
+        
+        <div style={{ position: 'relative' }}>
+          <div 
+            className="custom-select"
+            onClick={() => setNewDropdownOpen(!newDropdownOpen)}
+            style={{ position: 'relative' }}
+          >
+            <div className="add-note-btn">
+              + new
+              <span style={{ marginLeft: '0.5rem' }}>▼</span>
+            </div>
+            {newDropdownOpen && (
+              <div className="custom-dropdown">
+                <div 
+                  className="dropdown-option"
+                  onClick={() => { setShowAddForm(true); setNewDropdownOpen(false); }}
+                >
+                  Note
+                </div>
+                <div 
+                  className="dropdown-option"
+                  onClick={() => { setShowFolderForm(true); setNewDropdownOpen(false); }}
+                >
+                  Folder
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div style={{ marginLeft: '1rem', position: 'relative' }}>
+          <div 
+            className="custom-select"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            style={{ position: 'relative' }}
+          >
+            <div className="sort-select">
+              {sortBy === 'newest' && 'Most recent (created)'}
+              {sortBy === 'oldest' && 'Least recent (created)'}
+              {sortBy === 'updated_desc' && 'Most recent (updated)'}
+              {sortBy === 'updated_asc' && 'Least recent (updated)'}
+              {sortBy === 'title_asc' && 'Title (A–Z)'}
+              {sortBy === 'title_desc' && 'Title (Z–A)'}
+              {sortBy === 'tag_asc' && 'Tag (A–Z)'}
+              {sortBy === 'tag_desc' && 'Tag (Z–A)'}
+              <span style={{ marginLeft: '0.5rem' }}>▼</span>
+            </div>
+            {dropdownOpen && (
+              <div className="custom-dropdown">
+                <div 
+                  className={`dropdown-option ${sortBy === 'newest' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('newest'); setDropdownOpen(false); }}
+                >
+                  Most recent (created)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'oldest' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('oldest'); setDropdownOpen(false); }}
+                >
+                  Least recent (created)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'updated_desc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('updated_desc'); setDropdownOpen(false); }}
+                >
+                  Most recent (updated)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'updated_asc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('updated_asc'); setDropdownOpen(false); }}
+                >
+                  Least recent (updated)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'title_asc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('title_asc'); setDropdownOpen(false); }}
+                >
+                  Title (A–Z)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'title_desc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('title_desc'); setDropdownOpen(false); }}
+                >
+                  Title (Z–A)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'tag_asc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('tag_asc'); setDropdownOpen(false); }}
+                >
+                  Tag (A–Z)
+                </div>
+                <div 
+                  className={`dropdown-option ${sortBy === 'tag_desc' ? 'selected' : ''}`}
+                  onClick={() => { setSortBy('tag_desc'); setDropdownOpen(false); }}
+                >
+                  Tag (Z–A)
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {activeFolder !== null && (
@@ -408,6 +716,18 @@ export default function Home() {
           onDragLeave={() => setDragOverBreadcrumb(false)}
           onDrop={(e) => {
             setDragOverBreadcrumb(false);
+            
+            // Check if it's a folder being dragged
+            const folderDragData = e.dataTransfer.getData('application/x-note-or-folder');
+            if (folderDragData) {
+              const { type, id } = JSON.parse(folderDragData);
+              if (type === 'folder') {
+                moveFolderToFolder(parseInt(id), null); // Move to root level
+                return;
+              }
+            }
+            
+            // Handle note dragging (existing logic)
             const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
             if (!raw) return;
             let noteId = raw.trim();
@@ -534,7 +854,12 @@ export default function Home() {
         {folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).map((folder) => (
           <div key={`folder-${folder.id}`} 
                className={`note-card ${dragOverFolder === folder.id ? 'drag-over' : ''}`}
+               draggable
                onClick={() => setActiveFolder(folder.id)}
+               onDragStart={(e) => {
+                 e.dataTransfer.setData('application/x-note-or-folder', JSON.stringify({ type: 'folder', id: folder.id }));
+                 e.dataTransfer.setData('text/plain', `folder-${folder.id}`);
+               }}
                onDragOver={(e) => {
                  e.preventDefault();
                  setDragOverFolder(folder.id);
@@ -542,6 +867,18 @@ export default function Home() {
                onDragLeave={() => setDragOverFolder(null)}
                onDrop={(e) => {
                  setDragOverFolder(null);
+                 
+                 // Check if it's a folder being dragged
+                 const folderDragData = e.dataTransfer.getData('application/x-note-or-folder');
+                 if (folderDragData) {
+                   const { type, id } = JSON.parse(folderDragData);
+                   if (type === 'folder') {
+                     moveFolderToFolder(parseInt(id), folder.id);
+                     return;
+                   }
+                 }
+                 
+                 // Handle note dragging (existing logic)
                  const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
                  if (!raw) return;
                  let noteId = raw.trim();
@@ -568,11 +905,12 @@ export default function Home() {
         ))}
 
         {/* Notes (filtered by folder context) */}
-        {notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder)).map((note) => (
+        {visibleSortedNotes.map((note) => (
           <Link key={note.id} href={`/notes/${note.unique_id}`} className="note-card-link">
             <div className="note-card" draggable
                  onDragStart={(e) => {
                    e.dataTransfer.setData('application/x-note-id', note.unique_id);
+                   e.dataTransfer.setData('application/x-note-or-folder', JSON.stringify({ type: 'note', id: note.unique_id }));
                    e.dataTransfer.setData('text/plain', note.unique_id);
                  }}>
               {(() => {
@@ -660,6 +998,84 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.show && (
+        <div className="confirm-modal-overlay">
+          <div className="confirm-modal">
+            <div className="confirm-modal-header">
+              <h3>{confirmModal.title}</h3>
+            </div>
+            <div className="confirm-modal-body">
+              <p>{confirmModal.message}</p>
+            </div>
+            <div className="confirm-modal-actions">
+              <button 
+                className="confirm-cancel-btn"
+                onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+              >
+                Cancel
+              </button>
+              <button 
+                className={`confirm-delete-btn ${confirmModal.type}`}
+                onClick={confirmModal.onConfirm}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Trash Button */}
+      {isAuthenticated && (
+        <div
+          style={{ 
+            position: 'fixed',
+            bottom: '2rem',
+            right: '2rem',
+            background: dragOverTrash ? '#dc2626' : '#3b82f6',
+            color: 'white',
+            textDecoration: 'none',
+            padding: '1rem',
+            borderRadius: '50%',
+            boxShadow: dragOverTrash ? '0 4px 12px rgba(220, 38, 38, 0.5)' : '0 4px 12px rgba(59, 130, 246, 0.3)',
+            fontSize: '1.5rem',
+            width: '3.5rem',
+            height: '3.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s ease',
+            zIndex: 1000,
+            cursor: 'pointer'
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOverTrash(true);
+          }}
+          onDragLeave={() => {
+            setDragOverTrash(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOverTrash(false);
+            
+            const dragData = e.dataTransfer.getData('application/x-note-or-folder');
+            if (dragData) {
+              const { type, id } = JSON.parse(dragData);
+              if (type === 'note') {
+                moveNoteToTrash(id);
+              } else if (type === 'folder') {
+                moveFolderToTrash(parseInt(id));
+              }
+            }
+          }}
+          onClick={() => window.location.href = '/trash'}
+        >
+          🗑️
+        </div>
+      )}
     </div>
   );
 }

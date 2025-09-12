@@ -18,8 +18,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Document
-        fields = ['id', 'unique_id', 'title', 'content', 'folder', 'tags', 'tag_ids', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at', 'id', 'unique_id']
+        fields = ['id', 'unique_id', 'title', 'content', 'folder', 'tags', 'tag_ids', 'deleted', 'deleted_at', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'id', 'unique_id', 'deleted', 'deleted_at']
     
     def update(self, instance, validated_data):
         tag_ids = validated_data.pop('tag_ids', None)
@@ -33,7 +33,8 @@ class DocumentSerializer(serializers.ModelSerializer):
 class FolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'parent_folder', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'parent_folder', 'deleted', 'deleted_at', 'created_at', 'updated_at']
+        read_only_fields = ['deleted', 'deleted_at']
 
 class ImageSerializer(serializers.ModelSerializer):
     url = serializers.ReadOnlyField()

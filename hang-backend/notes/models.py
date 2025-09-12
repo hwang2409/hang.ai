@@ -14,6 +14,8 @@ class Folder(models.Model):
     name = models.CharField(max_length=255)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='folders', null=True, blank=True)
     parent_folder = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subfolders')
+    deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -28,6 +30,8 @@ class Document(models.Model):
     tags = models.ManyToManyField(Tag, blank=True, related_name='documents')
     # Allow null while migrating/backfilling to avoid UNIQUE clashes on empty string
     unique_id = models.CharField(max_length=64, unique=True, blank=True, null=True)
+    deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
