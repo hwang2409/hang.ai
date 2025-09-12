@@ -1,0 +1,9 @@
+[build]
+builder = "dockerfile"
+
+[deploy]
+startCommand = "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"
+healthcheckPath = "/api/"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
