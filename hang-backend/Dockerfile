@@ -31,8 +31,11 @@ RUN mkdir -p /app/staticfiles /app/media
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
+# Set default port
+ENV PORT=8000
+
 # Expose port
-EXPOSE 8000
+EXPOSE $PORT
 
 # Run the startup script
 CMD ["/app/start.sh"]

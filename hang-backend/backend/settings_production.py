@@ -16,7 +16,7 @@ ALLOWED_HOSTS = ['*']
 
 # CORS settings for production
 CORS_ALLOWED_ORIGINS = [
-    "hangai-six.vercel.app"
+    "https://hangai-six.vercel.app"
 ]
 
 # Add your production frontend URL here
