@@ -367,7 +367,7 @@ export default function Home() {
           });
           if (!res.ok) throw new Error('Failed to delete folder');
           // Remove the folder and all its subfolders
-          const removeFolderAndSubfolders = (folderId: number, folders: any[]) => {
+          const removeFolderAndSubfolders = (folderId: number, folders: Folder[]) => {
             const folderIdsToRemove = new Set([folderId]);
             
             // Find all subfolders recursively
@@ -445,7 +445,7 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to move folder to trash');
       
       // Remove the folder and all its subfolders
-      const removeFolderAndSubfolders = (folderId: number, folders: any[]) => {
+      const removeFolderAndSubfolders = (folderId: number, folders: Folder[]) => {
         const folderIdsToRemove = new Set([folderId]);
         
         // Find all subfolders recursively

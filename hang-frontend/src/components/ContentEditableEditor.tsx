@@ -75,7 +75,7 @@ export default function ContentEditableEditor({ value, onChange, onAutoSave, pla
   const serializeDomToMarkdown = (root: HTMLElement): string => {
     const parts: string[] = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
-    let node: Node | null = walker.currentNode;
+    const node: Node | null = walker.currentNode;
     // TreeWalker starts at root; we want its children
     function pushForElement(el: Element) {
       if (el.tagName === 'BR') {
@@ -330,7 +330,7 @@ export default function ContentEditableEditor({ value, onChange, onAutoSave, pla
       const parent = node.parentElement as HTMLElement;
       if (!parent) return;
       const text = node.data;
-      let lastIndex = 0;
+      const lastIndex = 0;
       const frag = document.createDocumentFragment();
 
       // Replace block math first
@@ -390,8 +390,8 @@ export default function ContentEditableEditor({ value, onChange, onAutoSave, pla
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
-    let container: Node = range.startContainer;
-    let offset: number = range.startOffset;
+    const container: Node = range.startContainer;
+    const offset: number = range.startOffset;
 
     // If selection is inside root?
     if (!(root === container || root.contains(container))) return;

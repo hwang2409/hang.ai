@@ -83,7 +83,7 @@ export default function LoginForm({ onSwitchToRegister, onClose }: LoginFormProp
 
         <div className="auth-switch">
           <p>
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <button
               type="button"
               onClick={onSwitchToRegister}

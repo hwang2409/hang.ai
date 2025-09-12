@@ -215,13 +215,13 @@ function decorateDoc(state: EditorState): DecorationSet {
 }
 
 type RangeBuilder = {
-  add: (from: number, to: number, deco: any) => void;
-  addWidget: (at: number, deco: any) => void;
+  add: (from: number, to: number, deco: Decoration) => void;
+  addWidget: (at: number, deco: Decoration) => void;
   finish: () => DecorationSet;
 };
 
 function RangeBuilder(): RangeBuilder {
-  const ranges: any[] = [];
+  const ranges: Decoration[] = [];
   return {
     add(from, to, deco) {
       ranges.push(deco.range(from, to));
@@ -284,7 +284,7 @@ function saveImagePositioning(img: HTMLImageElement, src: string, alt: string, a
   if (!editorElement) return;
   
   // Get the editor view from the global reference
-  const editorView = (window as any).currentEditorView;
+  const editorView = (window as { currentEditorView?: EditorView }).currentEditorView;
   if (!editorView) return;
   
   // Get current content
@@ -403,7 +403,7 @@ function showAlignmentMenu(event: MouseEvent, img: HTMLImageElement, src: string
 }
 
 class ImageWidget extends WidgetType {
-  constructor(private src: string, private alt: string, private positioning?: any, private isInline: boolean = false, private sizeData?: any) { super(); }
+  constructor(private src: string, private alt: string, private positioning?: { alignment: string; offset: number }, private isInline: boolean = false, private sizeData?: { width: number; height: number }) { super(); }
   toDOM() {
     const span = document.createElement('span');
     span.className = 'cm-image-inline draggable-image';
@@ -674,7 +674,7 @@ class ImageWidget extends WidgetType {
     span.appendChild(indicator);
   }
   
-  private findImageRange(editorView: any, src: string, alt: string): { from: number; to: number } | null {
+  private findImageRange(editorView: EditorView, src: string, alt: string): { from: number; to: number } | null {
     const doc = editorView.state.doc;
     const text = doc.toString();
     
@@ -1030,7 +1030,7 @@ export default function CMMarkdownEditor({ value, onChange, onAutoSave, classNam
   const saveTimer = useRef<number | null>(null);
 
   const mdHighlight = HighlightStyle.define((() => {
-    const styles: any[] = [];
+    const styles: { tag: Tag; fontSize?: string; fontWeight?: string; fontStyle?: string }[] = [];
     if ((t as any).heading1) styles.push({ tag: (t as any).heading1, fontSize: '1.75rem', fontWeight: '700' });
     if ((t as any).heading2) styles.push({ tag: (t as any).heading2, fontSize: '1.5rem', fontWeight: '700' });
     if ((t as any).heading3) styles.push({ tag: (t as any).heading3, fontSize: '1.25rem', fontWeight: '700' });

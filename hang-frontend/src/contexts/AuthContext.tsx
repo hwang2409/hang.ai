@@ -202,7 +202,7 @@ export const getAuthHeaders = (token: string | null) => {
 function extractErrorMessage(err: unknown): string | null {
   try {
     if (!err || typeof err !== 'object') return null;
-    const e = err as Record<string, any>;
+    const e = err as Record<string, string | string[]>;
     // Common DRF fields
     const fields = ['email', 'username', 'password', 'password_confirm', 'non_field_errors', 'detail'];
     for (const f of fields) {
