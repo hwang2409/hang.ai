@@ -19,8 +19,8 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Cloud SQL Auth Proxy
-RUN wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
+# Install Cloud SQL Auth Proxy v2
+RUN wget https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
     && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Install Python dependencies

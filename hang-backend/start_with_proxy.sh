@@ -50,7 +50,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-credentials.json
 echo "=========================================="
 echo "Starting Cloud SQL Auth Proxy..."
 echo "=========================================="
-cloud_sql_proxy -instances="$CLOUD_SQL_CONNECTION_NAME"=tcp:5432 -credential_file=/tmp/gcloud-credentials.json &
+cloud_sql_proxy "$CLOUD_SQL_CONNECTION_NAME" --port 5432 --credentials-file=/tmp/gcloud-credentials.json &
 PROXY_PID=$!
 
 # Wait for proxy to start
