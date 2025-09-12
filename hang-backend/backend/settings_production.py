@@ -1,0 +1,57 @@
+"""
+Production settings for backend project.
+"""
+
+from .settings import *
+import os
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = False
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-8^^(_73o8m&zd39tx!z2*%l5fw)qsv(*^=t1kl-7%xm5%uq+wm')
+
+# Allow all hosts for deployment (you should restrict this in production)
+ALLOWED_HOSTS = ['*']
+
+# CORS settings for production
+CORS_ALLOWED_ORIGINS = [
+    "https://your-frontend-domain.vercel.app",  # Replace with your actual frontend URL
+]
+
+# Add your production frontend URL here
+CORS_ALLOW_CREDENTIALS = True
+
+# Static files configuration for production
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
+# Media files configuration
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Security settings for production
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTPS settings (uncomment when using HTTPS)
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+
+# Database configuration (using environment variables)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
+        'OPTIONS': {
+            'sslmode': 'require',
+        },
+    }
+}

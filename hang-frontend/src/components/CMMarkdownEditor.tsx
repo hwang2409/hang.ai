@@ -418,7 +418,8 @@ class ImageWidget extends WidgetType {
     
     const img = document.createElement('img');
     // Ensure image URLs point to the backend server
-    img.src = this.src.startsWith('http') ? this.src : `http://localhost:8000${this.src}`;
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:8000';
+    img.src = this.src.startsWith('http') ? this.src : `${baseUrl}${this.src}`;
     img.alt = this.alt;
     img.draggable = true;
     
@@ -1185,7 +1186,8 @@ async function uploadImage(file: File, token: string | null): Promise<string> {
     headers['Authorization'] = `Token ${token}`;
   }
   
-  const res = await fetch('http://localhost:8000/api/upload/', {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+  const res = await fetch(`${API_BASE_URL}/upload/`, {
     method: 'POST',
     headers,
     body: form,

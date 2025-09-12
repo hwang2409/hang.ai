@@ -28,7 +28,7 @@ interface Note {
 }
 
 // API functions
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
 
 const fetchNote = async (id: string, token: string | null): Promise<Note> => {
   const response = await fetch(`${API_BASE_URL}/documents/${id}/`, {
