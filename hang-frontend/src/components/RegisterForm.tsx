@@ -51,10 +51,11 @@ export default function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormP
       if (success) {
         onClose?.();
       } else {
-        setError('Registration failed. Please try again.');
+        setError('Registration failed. Please check your details and try again.');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

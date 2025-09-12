@@ -96,7 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('auth_token', data.token);
         return true;
       } else {
-        return false;
+        // Try to surface backend error details for login as well
+        try {
+          const err = await response.json();
+          const msg = extractErrorMessage(err) || 'Invalid credentials';
+          throw new Error(msg);
+        } catch (_) {
+          return false;
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -121,11 +128,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('auth_token', data.token);
         return true;
       } else {
-        return false;
+        // Parse and throw a descriptive error so UI can show it
+        let message = 'Registration failed. Please try again.';
+        try {
+          const err = await response.json();
+          message = extractErrorMessage(err) || message;
+        } catch (_) {}
+        throw new Error(message);
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      return false;
+      // Network or thrown validation error
+      const msg = error instanceof Error ? error.message : 'Registration failed. Please try again.';
+      throw new Error(msg);
     }
   };
 
@@ -183,3 +197,27 @@ export const getAuthHeaders = (token: string | null) => {
   
   return headers;
 };
+
+// Extract a readable error message from DRF validation errors
+function extractErrorMessage(err: unknown): string | null {
+  try {
+    if (!err || typeof err !== 'object') return null;
+    const e = err as Record<string, any>;
+    // Common DRF fields
+    const fields = ['email', 'username', 'password', 'password_confirm', 'non_field_errors', 'detail'];
+    for (const f of fields) {
+      if (e[f]) {
+        const val = e[f];
+        if (Array.isArray(val)) return String(val[0]);
+        if (typeof val === 'string') return val;
+      }
+    }
+    // Fallback: first value
+    const first = Object.values(e)[0];
+    if (Array.isArray(first)) return String(first[0]);
+    if (typeof first === 'string') return first;
+    return null;
+  } catch {
+    return null;
+  }
+}

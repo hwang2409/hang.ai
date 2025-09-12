@@ -94,10 +94,38 @@ export default function Home() {
 
   // Helpers for uniform previews
   const getFirstImage = (md: string): { src: string; alt: string } | null => {
-    const match = md.match(/!\[(.*?)\]\((.*?)\)/);
-    if (!match) return null;
-    const [, alt, src] = match;
-    return { alt, src };
+    if (!md) return null;
+
+    // Try Markdown image: ![alt](src "optional title")
+    // Capture src up to a closing ) allowing optional title part
+    const mdMatch = md.match(/!\[(.*?)\]\((\S+?)(?:\s+\"[^\"]*\")?\)/);
+    if (mdMatch) {
+      const [, alt, rawSrc] = mdMatch;
+      const src = normalizeImageSrc(rawSrc);
+      return { alt: alt || '', src };
+    }
+
+    // Try HTML <img src="..." alt="...">
+    const htmlMatch = md.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
+    if (htmlMatch) {
+      const rawSrc = htmlMatch[1];
+      const altMatch = md.match(/<img[^>]*alt=["']([^"']*)["'][^>]*>/i);
+      const alt = altMatch ? altMatch[1] : '';
+      const src = normalizeImageSrc(rawSrc);
+      return { alt, src };
+    }
+
+    return null;
+  };
+
+  const normalizeImageSrc = (raw: string): string => {
+    const trimmed = raw.trim();
+    // If already absolute http(s), keep
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    // Ensure leading slash
+    const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    // Prefix backend origin
+    return `http://localhost:8000${withSlash}`;
   };
 
   const getFirstLines = (text: string, maxLines: number): string[] => {
@@ -157,6 +185,17 @@ export default function Home() {
         setNotes(fetchedNotes);
         setFolders(fetchedFolders);
         setError(null);
+
+        // Prefetch first images to warm cache
+        try {
+          const urls: string[] = [];
+          for (const n of fetchedNotes) {
+            const img = getFirstImage(n.content || '');
+            if (img?.src) urls.push(img.src);
+            if (urls.length >= 10) break; // limit prefetches
+          }
+          await Promise.all(urls.map(u => fetch(u, { method: 'GET', mode: 'no-cors' }).catch(() => null)));
+        } catch {}
       } catch (err) {
         setError('Failed to load notes. Please check if the Django server is running.');
         console.error('Error loading notes:', err);
@@ -279,8 +318,10 @@ export default function Home() {
     return (
       <div className="notes-container">
         <header className="notes-header">
-          <h1 className="notes-title">hang.ai</h1>
-          <p className="notes-subtitle">your thoughts, organized.</p>
+          <div className="header-left">
+            <h1 className="notes-title">hang.ai</h1>
+            <p className="notes-subtitle">your thoughts, organized.</p>
+          </div>
         </header>
         
         <div className="auth-welcome">
@@ -539,7 +580,15 @@ export default function Home() {
                 if (img) {
                   return (
                     <div className="note-card-media note-card-media-image">
-                      <img src={img.src.startsWith('http') ? img.src : `http://localhost:8000${img.src}`} alt={img.alt} />
+                      <img 
+                        src={img.src}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
                     </div>
                   );
                 }

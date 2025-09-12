@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.http import http_date, parse_http_date
+from django.utils import timezone
 from notes.models import Image
 from notes.serializers import ImageSerializer
 import os
@@ -48,11 +50,41 @@ class ServeImageView(APIView):
     def get(self, request, image_id):
         try:
             image = get_object_or_404(Image, id=image_id)
+
+            # Prepare caching headers
+            etag = f'W/"{image.id}-{image.size}"'
+            last_modified = image.created_at
+
+            # If-None-Match handling
+            inm = request.META.get('HTTP_IF_NONE_MATCH')
+            if inm and inm == etag:
+                not_modified = HttpResponse(status=304)
+                not_modified['ETag'] = etag
+                not_modified['Cache-Control'] = 'public, max-age=31536000'
+                not_modified['Last-Modified'] = http_date(last_modified.timestamp())
+                return not_modified
+
+            # If-Modified-Since handling
+            ims = request.META.get('HTTP_IF_MODIFIED_SINCE')
+            if ims:
+                try:
+                    ims_dt = timezone.datetime.fromtimestamp(parse_http_date(ims), tz=timezone.utc)
+                    if last_modified and last_modified <= ims_dt:
+                        not_modified = HttpResponse(status=304)
+                        not_modified['ETag'] = etag
+                        not_modified['Cache-Control'] = 'public, max-age=31536000'
+                        not_modified['Last-Modified'] = http_date(last_modified.timestamp())
+                        return not_modified
+                except Exception:
+                    pass
             
             # Return the image with proper headers
             response = HttpResponse(image.data, content_type=image.content_type)
             response['Content-Length'] = image.size
             response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+            response['ETag'] = etag
+            if last_modified:
+                response['Last-Modified'] = http_date(last_modified.timestamp())
             
             return response
             

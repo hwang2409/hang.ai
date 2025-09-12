@@ -2279,3 +2279,25 @@ body {
     gap: 0;
   }
 }
+
+/* Ensure homepage slogan is left-aligned under the title */
+.notes-header .notes-subtitle {
+  text-align: left;
+  margin: 0.25rem 0 0 0;
+}
+
+.notes-header .header-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.notes-header .notes-title {
+  text-align: left;
+  margin: 0;
+}
+
+.notes-header .notes-subtitle {
+  text-align: left;
+  margin: 0.25rem 0 0 0;
+}
