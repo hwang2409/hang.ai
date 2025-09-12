@@ -33,9 +33,10 @@ COPY . /app/
 # Create directories for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 
-# Copy and make startup script executable
+# Copy and make startup scripts executable
 COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY start_with_proxy.sh /app/start_with_proxy.sh
+RUN chmod +x /app/start.sh /app/start_with_proxy.sh
 
 # Set default port
 ENV PORT=8000
@@ -44,4 +45,4 @@ ENV PORT=8000
 EXPOSE $PORT
 
 # Run the startup script
-CMD ["/app/start.sh"]
+CMD ["bash", "/app/start_with_proxy.sh"]
