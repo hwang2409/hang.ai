@@ -418,7 +418,7 @@ class ImageWidget extends WidgetType {
     
     const img = document.createElement('img');
     // Ensure image URLs point to the backend server
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:8000';
+    const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api'))?.replace('/api', '') || 'http://localhost:8000';
     img.src = this.src.startsWith('http') ? this.src : `${baseUrl}${this.src}`;
     img.alt = this.alt;
     img.draggable = true;
@@ -1186,7 +1186,7 @@ async function uploadImage(file: File, token: string | null): Promise<string> {
     headers['Authorization'] = `Token ${token}`;
   }
   
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
   const res = await fetch(`${API_BASE_URL}/upload/`, {
     method: 'POST',
     headers,

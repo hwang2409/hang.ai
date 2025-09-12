@@ -34,7 +34,7 @@ interface Folder {
 }
 
 // API functions
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname === 'hangai-six.vercel.app' ? 'https://hangai-production.up.railway.app/api' : 'http://localhost:8000/api');
 
 console.log(API_BASE_URL);
 
@@ -127,7 +127,7 @@ export default function Home() {
     // Ensure leading slash
     const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     // Prefix backend origin
-    return `http://localhost:8000${withSlash}`;
+    return `${API_BASE_URL}${withSlash}`;
   };
 
   const getFirstLines = (text: string, maxLines: number): string[] => {
