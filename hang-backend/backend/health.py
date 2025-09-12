@@ -9,6 +9,19 @@ import os
 
 @csrf_exempt
 @require_http_methods(["GET"])
+def simple_health_check(request):
+    """
+    Simple health check that doesn't require database connection
+    """
+    return JsonResponse({
+        "status": "ok",
+        "service": "hang-ai-backend",
+        "message": "Service is running"
+    })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
 def health_check(request):
     """
     Simple health check endpoint that returns 200 OK if the service is running
@@ -25,11 +38,15 @@ def health_check(request):
         return JsonResponse({
             "status": "healthy",
             "service": "hang-ai-backend",
-            "database": "connected"
+            "database": "connected",
+            "debug": settings.DEBUG,
+            "allowed_hosts": settings.ALLOWED_HOSTS
         })
     except Exception as e:
+        import traceback
         return JsonResponse({
             "status": "unhealthy",
             "service": "hang-ai-backend",
-            "error": str(e)
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }, status=500)

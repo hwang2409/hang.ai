@@ -15,7 +15,13 @@ RUN apt-get update \
         postgresql-client \
         build-essential \
         libpq-dev \
+        wget \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Cloud SQL Auth Proxy
+RUN wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
+    && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Install Python dependencies
 COPY requirements.txt /app/

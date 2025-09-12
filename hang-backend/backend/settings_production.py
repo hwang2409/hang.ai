@@ -46,17 +46,6 @@ X_FRAME_OPTIONS = 'DENY'
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# Database configuration (using environment variables)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'hang_ai'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'OPTIONS': {
-            'sslmode': 'require',
-        },
-    }
-}
+# Database configuration is inherited from base settings
+# The base settings already loads dotenv and configures the database
+# When using Cloud SQL Auth Proxy, the connection will be to localhost:5432

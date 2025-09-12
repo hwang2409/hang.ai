@@ -2,7 +2,7 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "./start.sh"
+startCommand = "./start_with_proxy.sh"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

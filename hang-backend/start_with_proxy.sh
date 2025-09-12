@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "Starting Hang.ai backend..."
+echo "Starting Hang.ai backend with Cloud SQL Proxy..."
 echo "=========================================="
 
 # Set default port if PORT is not set
@@ -19,23 +19,57 @@ echo "DB_HOST: ${DB_HOST:-'NOT SET'}"
 echo "DB_PASSWORD: ${DB_PASSWORD:+SET}"
 echo "DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-'NOT SET'}"
 echo "SECRET_KEY: ${SECRET_KEY:+SET}"
+echo "GCLOUD_CREDENTIALS_BASE64: ${GCLOUD_CREDENTIALS_BASE64:+SET}"
+echo "CLOUD_SQL_CONNECTION_NAME: ${CLOUD_SQL_CONNECTION_NAME:-'NOT SET'}"
 
 # Check if required environment variables are set
-if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ] || [ -z "$DB_HOST" ]; then
+if [ -z "$GCLOUD_CREDENTIALS_BASE64" ]; then
     echo "=========================================="
-    echo "ERROR: Missing required database environment variables!"
-    echo "Please set: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST"
+    echo "ERROR: GCLOUD_CREDENTIALS_BASE64 is not set!"
+    echo "Please set your Google Cloud credentials in Railway"
     echo "=========================================="
     exit 1
 fi
 
-if [ -z "$DJANGO_SETTINGS_MODULE" ]; then
+if [ -z "$CLOUD_SQL_CONNECTION_NAME" ]; then
     echo "=========================================="
-    echo "ERROR: DJANGO_SETTINGS_MODULE is not set!"
-    echo "Please set: DJANGO_SETTINGS_MODULE=backend.settings_production"
+    echo "ERROR: CLOUD_SQL_CONNECTION_NAME is not set!"
+    echo "Please set: CLOUD_SQL_CONNECTION_NAME=project:region:instance"
     echo "=========================================="
     exit 1
 fi
+
+# Set up Google Cloud credentials
+echo "=========================================="
+echo "Setting up Google Cloud credentials..."
+echo "=========================================="
+echo "$GCLOUD_CREDENTIALS_BASE64" | base64 -d > /tmp/gcloud-credentials.json
+export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-credentials.json
+
+# Start Cloud SQL Auth Proxy in background
+echo "=========================================="
+echo "Starting Cloud SQL Auth Proxy..."
+echo "=========================================="
+cloud_sql_proxy -instances="$CLOUD_SQL_CONNECTION_NAME"=tcp:5432 -credential_file=/tmp/gcloud-credentials.json &
+PROXY_PID=$!
+
+# Wait for proxy to start
+echo "Waiting for Cloud SQL Auth Proxy to start..."
+sleep 5
+
+# Check if proxy is running
+if ! kill -0 $PROXY_PID 2>/dev/null; then
+    echo "=========================================="
+    echo "ERROR: Cloud SQL Auth Proxy failed to start!"
+    echo "=========================================="
+    exit 1
+fi
+
+echo "Cloud SQL Auth Proxy started successfully (PID: $PROXY_PID)"
+
+# Update database settings to use localhost (proxy)
+export DB_HOST=localhost
+export DB_PORT=5432
 
 # Test Django configuration
 echo "=========================================="
@@ -45,6 +79,7 @@ python manage.py check --deploy || {
     echo "=========================================="
     echo "ERROR: Django configuration check failed!"
     echo "=========================================="
+    kill $PROXY_PID 2>/dev/null || true
     exit 1
 }
 
@@ -56,6 +91,7 @@ python manage.py migrate --noinput || {
     echo "=========================================="
     echo "ERROR: Database migration failed!"
     echo "=========================================="
+    kill $PROXY_PID 2>/dev/null || true
     exit 1
 }
 
@@ -68,6 +104,18 @@ python manage.py collectstatic --noinput || {
     echo "WARNING: Static files collection failed, continuing..."
     echo "=========================================="
 }
+
+# Function to cleanup proxy on exit
+cleanup() {
+    echo "=========================================="
+    echo "Shutting down Cloud SQL Auth Proxy..."
+    echo "=========================================="
+    kill $PROXY_PID 2>/dev/null || true
+    wait $PROXY_PID 2>/dev/null || true
+}
+
+# Set trap to cleanup on exit
+trap cleanup EXIT
 
 # Start the application
 echo "=========================================="
