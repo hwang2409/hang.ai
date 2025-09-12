@@ -68,8 +68,8 @@ DATABASES = {
         'HOST': DB_HOST,
         'PORT': DB_PORT,
         'OPTIONS': {
-            # Cloud SQL Proxy requires SSL even for localhost connections
-            'sslmode': 'require',
+            # Cloud SQL Proxy v2 handles SSL internally, disable for localhost
+            'sslmode': 'disable',
         },
     }
 }
