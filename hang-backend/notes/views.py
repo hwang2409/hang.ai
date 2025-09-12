@@ -1,31 +1,63 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from django.conf import settings
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from notes.models import Image
+from notes.serializers import ImageSerializer
 import os
-import hashlib
-import secrets
 
 
 class UploadImageView(APIView):
+    """
+    Upload images and store them as binary data in the database
+    """
+    permission_classes = [IsAuthenticated]
+    
     def post(self, request):
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
         if not file_obj.content_type.startswith('image/'):
             return Response({'detail': 'Unsupported file type'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Read the file content
         content = file_obj.read()
-        # Hash content and add random salt to avoid conflicts across identical files
-        digest = hashlib.sha256(content + secrets.token_bytes(8)).hexdigest()
-        ext = os.path.splitext(file_obj.name)[1].lower() or '.bin'
-        filename = f"uploads/{digest}{ext}"
-        path = default_storage.save(filename, ContentFile(content))
-        # Build absolute URL using the storage URL (typically /media/...)
-        storage_url = default_storage.url(path) if hasattr(default_storage, 'url') else f"{settings.MEDIA_URL}{path}"
-        url = request.build_absolute_uri(storage_url)
-        return Response({'url': url}, status=status.HTTP_201_CREATED)
-from django.shortcuts import render
+        
+        # Create Image instance
+        image = Image.objects.create(
+            filename=file_obj.name,
+            content_type=file_obj.content_type,
+            data=content,
+            size=len(content),
+            user=request.user
+        )
+        
+        # Return the image URL for backward compatibility with frontend
+        return Response({'url': image.url}, status=status.HTTP_201_CREATED)
 
-# Create your views here.
+
+class ServeImageView(APIView):
+    """
+    Serve images from the database
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request, image_id):
+        try:
+            image = get_object_or_404(Image, id=image_id)
+            
+            # Return the image with proper headers
+            response = HttpResponse(image.data, content_type=image.content_type)
+            response['Content-Length'] = image.size
+            response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+            
+            return response
+            
+        except Exception as e:
+            return Response(
+                {'detail': f'Error serving image: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

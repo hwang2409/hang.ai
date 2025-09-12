@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from notes.models import Document, Folder, Tag
+from notes.models import Document, Folder, Tag, Image
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -34,3 +34,11 @@ class FolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Folder
         fields = ['id', 'name', 'parent_folder', 'created_at', 'updated_at']
+
+class ImageSerializer(serializers.ModelSerializer):
+    url = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = Image
+        fields = ['id', 'filename', 'content_type', 'size', 'url', 'created_at']
+        read_only_fields = ['id', 'size', 'url', 'created_at']

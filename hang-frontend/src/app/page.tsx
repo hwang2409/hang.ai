@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { useAuth } from '../contexts/AuthContext';
+import { getAuthHeaders } from '../contexts/AuthContext';
+import LoginForm from '../components/LoginForm';
+import RegisterForm from '../components/RegisterForm';
 
 interface Tag {
   id: number;
@@ -32,30 +36,30 @@ interface Folder {
 // API functions
 const API_BASE_URL = 'http://localhost:8000/api';
 
-const fetchNotes = async (): Promise<Note[]> => {
-  const response = await fetch(`${API_BASE_URL}/documents/`);
+const fetchNotes = async (token: string | null): Promise<Note[]> => {
+  const response = await fetch(`${API_BASE_URL}/documents/`, {
+    headers: getAuthHeaders(token),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch notes');
   }
   return response.json();
 };
 
-const createFolder = async (payload: { name: string; parent_folder?: number | null }): Promise<Folder> => {
+const createFolder = async (payload: { name: string; parent_folder?: number | null }, token: string | null): Promise<Folder> => {
   const response = await fetch(`${API_BASE_URL}/folders/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(token),
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to create folder');
   return response.json();
 };
 
-const createNote = async (note: { title: string; content: string }): Promise<Note> => {
+const createNote = async (note: { title: string; content: string }, token: string | null): Promise<Note> => {
   const response = await fetch(`${API_BASE_URL}/documents/`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(token),
     body: JSON.stringify(note),
   });
   if (!response.ok) {
@@ -64,9 +68,10 @@ const createNote = async (note: { title: string; content: string }): Promise<Not
   return response.json();
 };
 
-const deleteNote = async (uniqueId: string): Promise<void> => {
+const deleteNote = async (uniqueId: string, token: string | null): Promise<void> => {
   const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
     method: 'DELETE',
+    headers: getAuthHeaders(token),
   });
   if (!response.ok) {
     throw new Error('Failed to delete note');
@@ -83,6 +88,10 @@ const getDate = (dateString: string): string => {
 };
 
 export default function Home() {
+  const { user, token, logout, isAuthenticated, loading: authLoading } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
   // Helpers for uniform previews
   const getFirstImage = (md: string): { src: string; alt: string } | null => {
     const match = md.match(/!\[(.*?)\]\((.*?)\)/);
@@ -131,12 +140,19 @@ export default function Home() {
 
   // Load notes from API on component mount
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      setLoading(false);
+      return;
+    }
+
     const loadNotes = async () => {
       try {
         setLoading(true);
         const [fetchedNotes, fetchedFolders] = await Promise.all([
-          fetchNotes(),
-          fetch(`${API_BASE_URL}/folders/`).then(r => r.json())
+          fetchNotes(token),
+          fetch(`${API_BASE_URL}/folders/`, {
+            headers: getAuthHeaders(token),
+          }).then(r => r.json())
         ]);
         setNotes(fetchedNotes);
         setFolders(fetchedFolders);
@@ -150,16 +166,16 @@ export default function Home() {
     };
 
     loadNotes();
-  }, []);
+  }, [isAuthenticated, token]);
 
   // Add note function
   const addNote = async () => {
-    if (newNote.title.trim()) {
+    if (newNote.title.trim() && token) {
       try {
         const createdNote = await createNote({
           title: newNote.title.trim(),
           content: ''
-        });
+        }, token);
         
         setNotes([createdNote, ...notes]); // Add to beginning of array
         setNewNote({ title: '', content: '' }); // Reset form
@@ -174,6 +190,8 @@ export default function Home() {
 
   // Update note folder (drag & drop)
   const moveNoteToFolder = async (noteUniqueId: string, folderId: number | null) => {
+    if (!token) return;
+    
     try {
       console.log('moveNoteToFolder called with noteUniqueId:', noteUniqueId);
       // Normalize in case a full URL was dragged (e.g., from a Link)
@@ -193,7 +211,7 @@ export default function Home() {
 
       const res = await fetch(`${API_BASE_URL}/documents/${id}/`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(token),
         body: JSON.stringify({ folder: folderId })
       });
       if (!res.ok) {
@@ -211,9 +229,13 @@ export default function Home() {
 
   // Delete folder
   const deleteFolder = async (folderId: number) => {
+    if (!token) return;
     if (!confirm('Delete this folder? Notes inside will not be deleted.')) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/folders/${folderId}/`, { 
+        method: 'DELETE',
+        headers: getAuthHeaders(token),
+      });
       if (!res.ok) throw new Error('Failed to delete folder');
       setFolders(prev => prev.filter(f => f.id !== folderId));
       // Notes pointing to this folder will show up as uncategorized after backend SET_NULL
@@ -226,8 +248,9 @@ export default function Home() {
 
   // Delete note function
   const handleDeleteNote = async (uniqueId: string) => {
+    if (!token) return;
     try {
-      await deleteNote(uniqueId);
+      await deleteNote(uniqueId, token);
       setNotes(notes.filter(note => note.unique_id !== uniqueId));
       setError(null);
     } catch (err) {
@@ -242,11 +265,87 @@ export default function Home() {
     addNote();
   };
 
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <div className="notes-container">
+        <div className="loading-message">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show authentication screen if not logged in
+  if (!isAuthenticated) {
+    return (
+      <div className="notes-container">
+        <header className="notes-header">
+          <h1 className="notes-title">hang.ai</h1>
+          <p className="notes-subtitle">your thoughts, organized.</p>
+        </header>
+        
+        <div className="auth-welcome">
+          <h2>Welcome to hang.ai</h2>
+          <p>Sign in to access your notes, or create a new account to get started.</p>
+          
+          <div className="auth-buttons">
+            <button 
+              className="save-btn"
+              onClick={() => {
+                setAuthMode('login');
+                setShowAuth(true);
+              }}
+            >
+              Sign In
+            </button>
+            <button 
+              className="save-btn"
+              onClick={() => {
+                setAuthMode('register');
+                setShowAuth(true);
+              }}
+            >
+              Create Account
+            </button>
+          </div>
+        </div>
+
+        {showAuth && (
+          <>
+            {authMode === 'login' ? (
+              <LoginForm
+                onSwitchToRegister={() => setAuthMode('register')}
+                onClose={() => setShowAuth(false)}
+              />
+            ) : (
+              <RegisterForm
+                onSwitchToLogin={() => setAuthMode('login')}
+                onClose={() => setShowAuth(false)}
+              />
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="notes-container">
       <header className="notes-header">
-        <h1 className="notes-title">hang.ai</h1>
-        <p className="notes-subtitle">your thoughts, organized.</p>
+        <div className="header-left">
+          <h1 className="notes-title">hang.ai</h1>
+          <p className="notes-subtitle">your thoughts, organized.</p>
+        </div>
+        <div className="header-right">
+          <div className="user-info">
+            <span className="user-name">Welcome, {user?.full_name || user?.username}</span>
+            <button 
+              className="logout-btn"
+              onClick={logout}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
       </header>
 
       <div className="notes-actions-row">
@@ -355,14 +454,17 @@ export default function Home() {
             <h2>Add New Folder</h2>
             <form onSubmit={async (e) => {
               e.preventDefault();
+              if (!token) return;
               const folder = await createFolder({ 
                 name: newFolder.name.trim(),
                 parent_folder: activeFolder
-              });
+              }, token);
               setNewFolder({ name: '' });
               setShowFolderForm(false);
               // Refresh folders list
-              const fetchedFolders = await fetch(`${API_BASE_URL}/folders/`).then(r => r.json());
+              const fetchedFolders = await fetch(`${API_BASE_URL}/folders/`, {
+                headers: getAuthHeaders(token),
+              }).then(r => r.json());
               setFolders(fetchedFolders);
             }}>
               <input
@@ -437,7 +539,7 @@ export default function Home() {
                 if (img) {
                   return (
                     <div className="note-card-media note-card-media-image">
-                      <img src={img.src} alt={img.alt} />
+                      <img src={img.src.startsWith('http') ? img.src : `http://localhost:8000${img.src}`} alt={img.alt} />
                     </div>
                   );
                 }

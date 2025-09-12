@@ -18,12 +18,14 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from backend.routers import router
-from notes.views import UploadImageView
+from notes.views import UploadImageView, ServeImageView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/auth/', include('accounts.urls')),
     path('api/upload/', UploadImageView.as_view(), name='upload-image'),
+    path('api/images/<uuid:image_id>/', ServeImageView.as_view(), name='serve-image'),
 ]
 
 if settings.DEBUG:

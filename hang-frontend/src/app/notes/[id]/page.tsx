@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MarkdownRenderer from '../../../components/MarkdownRenderer';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getAuthHeaders } from '../../../contexts/AuthContext';
 import ContentEditableEditor from '../../../components/ContentEditableEditor';
 import CMMarkdownEditor from '../../../components/CMMarkdownEditor';
 import jsPDF from 'jspdf';
@@ -28,19 +30,21 @@ interface Note {
 // API functions
 const API_BASE_URL = 'http://localhost:8000/api';
 
-const fetchNote = async (id: string): Promise<Note> => {
-  const response = await fetch(`${API_BASE_URL}/documents/${id}/`);
+const fetchNote = async (id: string, token: string | null): Promise<Note> => {
+  const response = await fetch(`${API_BASE_URL}/documents/${id}/`, {
+    headers: getAuthHeaders(token),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch note');
   }
   return response.json();
 };
 
-const updateNote = async (uniqueId: string, note: { title?: string; content?: string; tag_ids?: number[] }): Promise<Note> => {
+const updateNote = async (uniqueId: string, note: { title?: string; content?: string; tag_ids?: number[] }, token: string | null): Promise<Note> => {
   const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(token),
       'Accept': 'application/json',
     },
     body: JSON.stringify(note),
@@ -52,20 +56,20 @@ const updateNote = async (uniqueId: string, note: { title?: string; content?: st
   return response.json();
 };
 
-const fetchTags = async (): Promise<Tag[]> => {
-  const response = await fetch(`${API_BASE_URL}/tags/`);
+const fetchTags = async (token: string | null): Promise<Tag[]> => {
+  const response = await fetch(`${API_BASE_URL}/tags/`, {
+    headers: getAuthHeaders(token),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch tags');
   }
   return response.json();
 };
 
-const createTag = async (name: string, color: string = '#3b82f6'): Promise<Tag> => {
+const createTag = async (name: string, color: string = '#3b82f6', token: string | null): Promise<Tag> => {
   const response = await fetch(`${API_BASE_URL}/tags/`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(token),
     body: JSON.stringify({ name, color }),
   });
   if (!response.ok) {
@@ -74,9 +78,10 @@ const createTag = async (name: string, color: string = '#3b82f6'): Promise<Tag> 
   return response.json();
 };
 
-const deleteNote = async (uniqueId: string): Promise<void> => {
+const deleteNote = async (uniqueId: string, token: string | null): Promise<void> => {
   const response = await fetch(`${API_BASE_URL}/documents/${uniqueId}/`, {
     method: 'DELETE',
+    headers: getAuthHeaders(token),
   });
   if (!response.ok) {
     throw new Error('Failed to delete note');
@@ -115,6 +120,7 @@ export default function NoteDetail() {
   const params = useParams();
   const router = useRouter();
   const noteUniqueId = params.id as string;
+  const { token, isAuthenticated, loading: authLoading } = useAuth();
 
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
@@ -273,7 +279,8 @@ export default function NoteDetail() {
           }
         }
         
-        const replacement = `<div style="${containerStyle}"><img src="${src}" alt="${alt}" style="${imageStyle}" /></div>`;
+        const fullSrc = src.startsWith('http') ? src : `http://localhost:8000${src}`;
+        const replacement = `<div style="${containerStyle}"><img src="${fullSrc}" alt="${alt}" style="${imageStyle}" /></div>`;
         console.log('Replacing with:', replacement);
         htmlContent = htmlContent.replace(fullMatch, replacement);
       }
@@ -341,13 +348,25 @@ export default function NoteDetail() {
   };
 
   // Load note and tags on component mount
+  // Redirect to home if not authenticated
   useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token || !noteUniqueId) {
+      setLoading(false);
+      return;
+    }
+
     const loadData = async () => {
       try {
         setLoading(true);
         const [fetchedNote, fetchedTags] = await Promise.all([
-          fetchNote(noteUniqueId),
-          fetchTags()
+          fetchNote(noteUniqueId, token),
+          fetchTags(token)
         ]);
         setNote(fetchedNote);
         setEditForm({ title: fetchedNote.title, content: fetchedNote.content });
@@ -361,20 +380,18 @@ export default function NoteDetail() {
       }
     };
 
-    if (noteUniqueId) {
-      loadData();
-    }
-  }, [noteUniqueId]);
+    loadData();
+  }, [noteUniqueId, isAuthenticated, token]);
 
   // Handle auto-save
   const handleAutoSave = async (content: string) => {
-    if (!note) return;
+    if (!note || !token) return;
     
     try {
       const updatedNote = await updateNote(noteUniqueId, {
         title: editForm.title.trim(),
         content: content.trim()
-      });
+      }, token);
       
       setNote(updatedNote);
       setError(null);
@@ -386,9 +403,9 @@ export default function NoteDetail() {
 
   // Save title when pressing Enter in the title input
   const handleTitleSave = async () => {
-    if (!note) return;
+    if (!note || !token) return;
     try {
-      const updated = await updateNote(noteUniqueId, { title: editForm.title.trim() });
+      const updated = await updateNote(noteUniqueId, { title: editForm.title.trim() }, token);
       setNote(updated);
       setError(null);
     } catch (err) {
@@ -400,7 +417,7 @@ export default function NoteDetail() {
   // Handle back navigation with forced save of both title and content
   const handleBack = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    if (!note) {
+    if (!note || !token) {
       router.push('/');
       return;
     }
@@ -408,7 +425,7 @@ export default function NoteDetail() {
       const updated = await updateNote(noteUniqueId, {
         title: editForm.title.trim(),
         content: editForm.content.trim(),
-      });
+      }, token);
       setNote(updated);
       setError(null);
       router.push('/');
@@ -420,12 +437,12 @@ export default function NoteDetail() {
 
   // Handle adding a tag to the note
   const handleAddTag = async (tagId: number) => {
-    if (!note) return;
+    if (!note || !token) return;
     try {
       const currentTagIds = note.tags.map(tag => tag.id);
       const updated = await updateNote(noteUniqueId, {
         tag_ids: [...currentTagIds, tagId]
-      });
+      }, token);
       setNote(updated);
       setError(null);
     } catch (err) {
@@ -436,12 +453,12 @@ export default function NoteDetail() {
 
   // Handle removing a tag from the note
   const handleRemoveTag = async (tagId: number) => {
-    if (!note) return;
+    if (!note || !token) return;
     try {
       const currentTagIds = note.tags.map(tag => tag.id);
       const updated = await updateNote(noteUniqueId, {
         tag_ids: currentTagIds.filter(id => id !== tagId)
-      });
+      }, token);
       setNote(updated);
       setError(null);
     } catch (err) {
@@ -452,9 +469,9 @@ export default function NoteDetail() {
 
   // Handle creating a new tag
   const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
+    if (!newTagName.trim() || !token) return;
     try {
-      const newTag = await createTag(newTagName.trim());
+      const newTag = await createTag(newTagName.trim(), '#3b82f6', token);
       setAllTags(prev => [...prev, newTag]);
       await handleAddTag(newTag.id);
       setNewTagName('');
@@ -468,11 +485,11 @@ export default function NoteDetail() {
 
   // Handle delete
   const handleDelete = async () => {
-    if (!note) return;
+    if (!note || !token) return;
     
     if (window.confirm('Are you sure you want to delete this note?')) {
       try {
-        await deleteNote(noteUniqueId);
+        await deleteNote(noteUniqueId, token);
         router.push('/');
       } catch (err) {
         setError('Failed to delete note. Please try again.');
@@ -481,6 +498,22 @@ export default function NoteDetail() {
     }
   };
 
+
+  if (authLoading) {
+    return (
+      <div className="note-detail-container">
+        <div className="loading-message">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="note-detail-container">
+        <div className="loading-message">Redirecting to login...</div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -639,6 +672,7 @@ export default function NoteDetail() {
               onChange={(content) => setEditForm({ ...editForm, content })}
               onAutoSave={handleAutoSave}
               className="cm-editor"
+              token={token}
               placeholder="Write your note here..."
             />
 
@@ -650,14 +684,14 @@ export default function NoteDetail() {
                   {imageUrls.map((url, index) => (
                     <a
                       key={index}
-                      href={url}
+                      href={url.startsWith('http') ? url : `http://localhost:8000${url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="attachment-item"
                     >
                       <div className="attachment-preview">
                         <img 
-                          src={url} 
+                          src={url.startsWith('http') ? url : `http://localhost:8000${url}`} 
                           alt={`Attachment ${index + 1}`}
                           className="attachment-thumbnail"
                           onError={(e) => {

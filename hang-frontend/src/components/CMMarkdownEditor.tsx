@@ -15,6 +15,7 @@ type Props = {
   onAutoSave?: (value: string) => void;
   className?: string;
   placeholder?: string;
+  token?: string | null;
 };
 
 // Decoration logic: render math and images when safe (caret not inside)
@@ -416,7 +417,8 @@ class ImageWidget extends WidgetType {
     span.style.float = 'left';
     
     const img = document.createElement('img');
-    img.src = this.src;
+    // Ensure image URLs point to the backend server
+    img.src = this.src.startsWith('http') ? this.src : `http://localhost:8000${this.src}`;
     img.alt = this.alt;
     img.draggable = true;
     
@@ -1021,7 +1023,7 @@ class ChecklistWidget extends WidgetType {
   }
 }
 
-export default function CMMarkdownEditor({ value, onChange, onAutoSave, className, placeholder }: Props) {
+export default function CMMarkdownEditor({ value, onChange, onAutoSave, className, placeholder, token }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -1083,7 +1085,7 @@ export default function CMMarkdownEditor({ value, onChange, onAutoSave, classNam
             const coords = view.posAtCoords({ x: event.clientX, y: event.clientY });
             const pos = coords ? coords : view.state.selection.main.from;
             for (const file of files) {
-              uploadImage(file).then(url => {
+              uploadImage(file, token).then(url => {
                 const md = `\n![image](${url})\n`;
                 view.dispatch({ changes: { from: pos, to: pos, insert: md }, selection: { anchor: pos + md.length } });
               }).catch(() => {});
@@ -1097,7 +1099,7 @@ export default function CMMarkdownEditor({ value, onChange, onAutoSave, classNam
             event.preventDefault();
             const pos = view.state.selection.main.from;
             for (const file of imageFiles) {
-              uploadImage(file).then(url => {
+              uploadImage(file, token).then(url => {
                 const md = `\n![image](${url})\n`;
                 view.dispatch({ changes: { from: pos, to: pos, insert: md }, selection: { anchor: pos + md.length } });
               }).catch(() => {});
@@ -1174,11 +1176,18 @@ export default function CMMarkdownEditor({ value, onChange, onAutoSave, classNam
   return <div ref={ref} className={className} />;
 }
 
-async function uploadImage(file: File): Promise<string> {
+async function uploadImage(file: File, token: string | null): Promise<string> {
   const form = new FormData();
   form.append('file', file);
+  
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Token ${token}`;
+  }
+  
   const res = await fetch('http://localhost:8000/api/upload/', {
     method: 'POST',
+    headers,
     body: form,
   });
   if (!res.ok) throw new Error('upload failed');
