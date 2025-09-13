@@ -292,7 +292,7 @@ export default function NoteDetail() {
           }
         }
         
-        const fullSrc = src.startsWith('http') ? src : `http://localhost:8000${src}`;
+        const fullSrc = src.startsWith('http') ? src : `${getApiBaseUrl().replace('/api', '')}${src}`;
         const replacement = `<div style="${containerStyle}"><img src="${fullSrc}" alt="${alt}" style="${imageStyle}" /></div>`;
         console.log('Replacing with:', replacement);
         htmlContent = htmlContent.replace(fullMatch, replacement);
@@ -697,14 +697,14 @@ export default function NoteDetail() {
                   {imageUrls.map((url, index) => (
                     <a
                       key={index}
-                      href={url.startsWith('http') ? url : `http://localhost:8000${url}`}
+                      href={url.startsWith('http') ? url : `${getApiBaseUrl().replace('/api', '')}${url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="attachment-item"
                     >
                       <div className="attachment-preview">
                         <img 
-                          src={url.startsWith('http') ? url : `http://localhost:8000${url}`} 
+                          src={url.startsWith('http') ? url : `${getApiBaseUrl().replace('/api', '')}${url}`} 
                           alt={`Attachment ${index + 1}`}
                           className="attachment-thumbnail"
                           onError={(e) => {
