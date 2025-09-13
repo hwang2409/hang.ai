@@ -137,8 +137,8 @@ export default function Home() {
     if (/^https?:\/\//i.test(trimmed)) return trimmed;
     // Ensure leading slash
     const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    // Prefix backend origin
-    return `${getApiBaseUrl()}${withSlash}`;
+    // Prefix backend origin (remove /api from the base URL for image URLs)
+    return `${getApiBaseUrl().replace('/api', '')}${withSlash}`;
   };
 
   const getFirstLines = (text: string, maxLines: number): string[] => {
