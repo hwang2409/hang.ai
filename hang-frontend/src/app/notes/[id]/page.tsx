@@ -6,6 +6,7 @@ import Link from 'next/link';
 import MarkdownRenderer from '../../../components/MarkdownRenderer';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getAuthHeaders } from '../../../contexts/AuthContext';
+import ThemeToggle from '../../../components/ThemeToggle';
 import ContentEditableEditor from '../../../components/ContentEditableEditor';
 import CMMarkdownEditor from '../../../components/CMMarkdownEditor';
 import jsPDF from 'jspdf';
@@ -560,6 +561,7 @@ export default function NoteDetail() {
         <Link href="/" className="back-link" onClick={handleBack}>← Back to Notes</Link>
         
         <div className="note-actions">
+          <ThemeToggle />
           <button 
             className="delete-btn"
             onClick={handleDelete}

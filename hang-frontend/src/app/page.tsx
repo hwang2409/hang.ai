@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAuthHeaders } from '../contexts/AuthContext';
 import LoginForm from '../components/LoginForm';
 import RegisterForm from '../components/RegisterForm';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface Tag {
   id: number;
@@ -539,6 +540,9 @@ export default function Home() {
             <h1 className="notes-title">hang.ai</h1>
             <p className="notes-subtitle">your thoughts, organized.</p>
           </div>
+          <div className="header-right">
+            <ThemeToggle />
+          </div>
         </header>
         
         <div className="auth-welcome">
@@ -603,6 +607,7 @@ export default function Home() {
               Logout
             </button>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -1043,16 +1048,17 @@ export default function Home() {
       {/* Floating Trash Button */}
       {isAuthenticated && (
         <div
+          className="floating-trash-btn"
           style={{ 
             position: 'fixed',
             bottom: '2rem',
             right: '2rem',
-            background: dragOverTrash ? '#dc2626' : '#3b82f6',
+            background: dragOverTrash ? '#dc2626' : 'var(--accent)',
             color: 'white',
             textDecoration: 'none',
             padding: '1rem',
             borderRadius: '50%',
-            boxShadow: dragOverTrash ? '0 4px 12px rgba(220, 38, 38, 0.5)' : '0 4px 12px rgba(59, 130, 246, 0.3)',
+            boxShadow: dragOverTrash ? '0 4px 12px rgba(220, 38, 38, 0.5)' : 'var(--shadow-lg)',
             fontSize: '1.5rem',
             width: '3.5rem',
             height: '3.5rem',
