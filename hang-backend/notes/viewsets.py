@@ -6,8 +6,8 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.utils import timezone
-from notes.models import Document, Folder, Tag
-from notes.serializers import DocumentSerializer, FolderSerializer, TagSerializer
+from notes.models import Document, Folder, Tag, Flashcard, FlashcardFolder
+from notes.serializers import DocumentSerializer, FolderSerializer, TagSerializer, FlashcardSerializer, FlashcardFolderSerializer
 
 class DocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -198,3 +198,196 @@ class TagViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
+
+
+class FlashcardViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FlashcardSerializer
+
+    def get_queryset(self):
+        """
+        Filter flashcards by the current user, excluding deleted ones
+        """
+        return Flashcard.objects.filter(user=self.request.user, deleted=False)
+
+    def perform_create(self, serializer):
+        """
+        Set the user to the current user when creating a flashcard
+        """
+        serializer.save(user=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Soft delete: mark flashcard as deleted
+        """
+        flashcard = self.get_object()
+        flashcard.deleted = True
+        flashcard.deleted_at = timezone.now()
+        flashcard.save()
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'])
+    def due_for_review(self, request):
+        """
+        Get flashcards that are due for review
+        """
+        due_cards = self.get_queryset().filter(next_review__lte=timezone.now())
+        serializer = self.get_serializer(due_cards, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """
+        Record a review session for a flashcard
+        """
+        flashcard = self.get_object()
+        quality_rating = request.data.get('quality_rating')
+        
+        if quality_rating is None or not (0 <= quality_rating <= 5):
+            return Response(
+                {'error': 'quality_rating must be between 0 and 5'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        flashcard.update_review(quality_rating)
+        serializer = self.get_serializer(flashcard)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """
+        Get flashcard statistics for the user
+        """
+        queryset = self.get_queryset()
+        
+        stats = {
+            'total_cards': queryset.count(),
+            'due_for_review': queryset.filter(next_review__lte=timezone.now()).count(),
+            'new_cards': queryset.filter(repetitions=0).count(),
+            'learning_cards': queryset.filter(repetitions__gt=0, interval_days__lt=7).count(),
+            'mature_cards': queryset.filter(interval_days__gte=7).count(),
+        }
+        
+        return Response(stats)
+
+    @action(detail=False, methods=['get'])
+    def trash(self, request):
+        """
+        Get all deleted flashcards for the current user
+        """
+        deleted_flashcards = Flashcard.objects.filter(user=request.user, deleted=True)
+        serializer = self.get_serializer(deleted_flashcards, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        """
+        Restore a deleted flashcard
+        """
+        flashcard = get_object_or_404(Flashcard, pk=pk, user=request.user, deleted=True)
+        flashcard.deleted = False
+        flashcard.deleted_at = None
+        flashcard.save()
+        
+        serializer = self.get_serializer(flashcard)
+        return Response(serializer.data)
+
+
+class FlashcardFolderViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FlashcardFolderSerializer
+
+    def get_queryset(self):
+        """
+        Filter flashcard folders by the current user, excluding deleted ones
+        """
+        return FlashcardFolder.objects.filter(user=self.request.user, deleted=False)
+
+    def perform_create(self, serializer):
+        """
+        Set the user to the current user when creating a flashcard folder
+        """
+        serializer.save(user=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Soft delete: mark flashcard folder as deleted
+        """
+        folder = self.get_object()
+        folder.deleted = True
+        folder.deleted_at = timezone.now()
+        folder.save()
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def move_to_folder(self, request, pk=None):
+        """
+        Move a flashcard folder to another flashcard folder
+        """
+        folder = self.get_object()
+        target_folder_id = request.data.get('target_folder_id')
+        
+        if target_folder_id is None:
+            folder.parent_folder = None
+        else:
+            try:
+                target_folder = FlashcardFolder.objects.get(id=target_folder_id, user=request.user)
+                folder.parent_folder = target_folder
+            except FlashcardFolder.DoesNotExist:
+                return Response(
+                    {'error': 'Target folder not found'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        folder.save()
+        serializer = self.get_serializer(folder)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def move_to_note_folder(self, request, pk=None):
+        """
+        Move a flashcard folder to a regular note folder
+        """
+        flashcard_folder = self.get_object()
+        target_folder_id = request.data.get('target_folder_id')
+        
+        if target_folder_id is None:
+            # Move to root level (no note folder)
+            flashcard_folder.note_folder = None
+        else:
+            try:
+                target_folder = Folder.objects.get(id=target_folder_id, user=request.user)
+                flashcard_folder.note_folder = target_folder
+            except Folder.DoesNotExist:
+                return Response(
+                    {'error': 'Target folder not found'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        flashcard_folder.save()
+        serializer = self.get_serializer(flashcard_folder)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def trash(self, request):
+        """
+        Get all deleted flashcard folders for the current user
+        """
+        deleted_folders = FlashcardFolder.objects.filter(user=request.user, deleted=True)
+        serializer = self.get_serializer(deleted_folders, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        """
+        Restore a deleted flashcard folder
+        """
+        folder = get_object_or_404(FlashcardFolder, pk=pk, user=request.user, deleted=True)
+        folder.deleted = False
+        folder.deleted_at = None
+        folder.save()
+        
+        serializer = self.get_serializer(folder)
+        return Response(serializer.data)

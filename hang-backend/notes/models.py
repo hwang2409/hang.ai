@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
 import hashlib
 import uuid
 
@@ -75,3 +77,104 @@ class Image(models.Model):
     def url(self):
         """Return the URL to serve this image"""
         return f"/api/images/{self.id}/"
+
+
+class FlashcardFolder(models.Model):
+    """
+    Model for organizing flashcards into folders
+    """
+    name = models.CharField(max_length=255)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='flashcard_folders')
+    parent_folder = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subfolders')
+    note_folder = models.ForeignKey('Folder', on_delete=models.CASCADE, null=True, blank=True, related_name='flashcard_folders', help_text="Regular note folder this flashcard folder belongs to")
+    description = models.TextField(blank=True, null=True, help_text="Optional description of the flashcard folder")
+    deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Flashcard(models.Model):
+    """
+    Model for flashcards with spaced repetition support
+    """
+    DIFFICULTY_CHOICES = [
+        ('easy', 'Easy'),
+        ('medium', 'Medium'),
+        ('hard', 'Hard'),
+    ]
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='flashcards')
+    folder = models.ForeignKey(FlashcardFolder, on_delete=models.SET_NULL, null=True, blank=True, related_name='flashcards')
+    tags = models.ManyToManyField(Tag, blank=True, related_name='flashcards')
+    
+    # Card content
+    front = models.TextField(help_text="Question or prompt")
+    back = models.TextField(help_text="Answer or explanation")
+    
+    # Spaced repetition fields
+    difficulty = models.CharField(max_length=10, choices=DIFFICULTY_CHOICES, default='medium')
+    interval_days = models.PositiveIntegerField(default=1, help_text="Days until next review")
+    repetitions = models.PositiveIntegerField(default=0, help_text="Number of times reviewed")
+    ease_factor = models.FloatField(default=2.5, help_text="Ease factor for spaced repetition")
+    next_review = models.DateTimeField(default=timezone.now, help_text="When to review next")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['next_review', 'created_at']
+    
+    def __str__(self):
+        return f"Flashcard: {self.front[:50]}..."
+    
+    def update_review(self, quality_rating):
+        """
+        Update card based on user's performance (0-5 scale)
+        Quality ratings:
+        0-1: Complete blackout
+        2-3: Incorrect response; correct one remembered
+        4-5: Correct response
+        """
+        if quality_rating < 3:
+            # Failed - reset interval
+            self.interval_days = 1
+            self.repetitions = 0
+        else:
+            # Successful
+            self.repetitions += 1
+            
+            if self.repetitions == 1:
+                self.interval_days = 1
+            elif self.repetitions == 2:
+                self.interval_days = 6
+            else:
+                # Apply SuperMemo algorithm
+                self.interval_days = int(self.interval_days * self.ease_factor)
+            
+            # Update ease factor
+            self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality_rating) * (0.08 + (5 - quality_rating) * 0.02)))
+        
+        # Set next review date
+        self.next_review = timezone.now() + timedelta(days=self.interval_days)
+        self.save()
+    
+    @property
+    def is_due_for_review(self):
+        """Check if card is due for review"""
+        return timezone.now() >= self.next_review
+    
+    @property
+    def days_until_review(self):
+        """Get days until next review"""
+        delta = self.next_review - timezone.now()
+        return max(0, delta.days)

@@ -8,6 +8,11 @@ import { getAuthHeaders } from '../contexts/AuthContext';
 import LoginForm from '../components/LoginForm';
 import RegisterForm from '../components/RegisterForm';
 import ThemeToggle from '../components/ThemeToggle';
+import FlashcardForm from '../components/FlashcardForm';
+import FlashcardList from '../components/FlashcardList';
+import StudyMode from '../components/StudyMode';
+import FlashcardReview from '../components/FlashcardReview';
+import LaTeXRenderer from '../utils/latexRenderer';
 
 interface Tag {
   id: number;
@@ -30,6 +35,33 @@ interface Folder {
   id: number;
   name: string;
   parent_folder?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FlashcardFolder {
+  id: number;
+  name: string;
+  parent_folder?: number | null;
+  note_folder?: number | null;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Flashcard {
+  id: number;
+  front: string;
+  back: string;
+  difficulty: string;
+  folder?: number | null;
+  tags: Tag[];
+  interval_days: number;
+  repetitions: number;
+  ease_factor: number;
+  next_review: string;
+  is_due_for_review: boolean;
+  days_until_review: number;
   created_at: string;
   updated_at: string;
 }
@@ -67,6 +99,91 @@ const createFolder = async (payload: { name: string; parent_folder?: number | nu
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to create folder');
+  return response.json();
+};
+
+const createFlashcard = async (payload: { front: string; back: string; difficulty: string; folder?: number | null; tag_ids?: number[] }, token: string | null): Promise<Flashcard> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcards/`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to create flashcard');
+  return response.json();
+};
+
+const fetchFlashcards = async (token: string | null): Promise<Flashcard[]> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcards/`, {
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch flashcards');
+  return response.json();
+};
+
+const updateFlashcard = async (id: number, payload: { front: string; back: string; difficulty: string; folder?: number | null; tag_ids?: number[] }, token: string | null): Promise<Flashcard> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcards/${id}/`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to update flashcard');
+  return response.json();
+};
+
+const deleteFlashcard = async (id: number, token: string | null): Promise<void> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcards/${id}/`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to delete flashcard');
+};
+
+const reviewFlashcard = async (id: number, qualityRating: number, token: string | null): Promise<Flashcard> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcards/${id}/review/`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ quality_rating: qualityRating }),
+  });
+  if (!response.ok) throw new Error('Failed to record review');
+  return response.json();
+};
+
+const createFlashcardFolder = async (payload: { name: string; parent_folder?: number | null; description?: string }, token: string | null): Promise<FlashcardFolder> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcard-folders/`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to create flashcard folder');
+  return response.json();
+};
+
+const fetchFlashcardFolders = async (token: string | null): Promise<FlashcardFolder[]> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcard-folders/`, {
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch flashcard folders');
+  return response.json();
+};
+
+const deleteFlashcardFolder = async (id: number, token: string | null): Promise<void> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcard-folders/${id}/`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to delete flashcard folder');
+};
+
+const moveFlashcardFolderToNoteFolder = async (flashcardFolderId: number, targetFolderId: number | null, token: string | null): Promise<FlashcardFolder> => {
+  const response = await fetch(`${getApiBaseUrl()}/flashcard-folders/${flashcardFolderId}/move_to_note_folder/`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ target_folder_id: targetFolderId }),
+  });
+  if (!response.ok) throw new Error('Failed to move flashcard folder');
   return response.json();
 };
 
@@ -197,6 +314,21 @@ export default function Home() {
     type: 'note'
   });
   const [dragOverTrash, setDragOverTrash] = useState(false);
+  
+  // Flashcard state
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [flashcardFolders, setFlashcardFolders] = useState<FlashcardFolder[]>([]);
+  const [activeFlashcardFolder, setActiveFlashcardFolder] = useState<number | null>(null);
+  const [showFlashcardForm, setShowFlashcardForm] = useState(false);
+  const [showFlashcardFolderForm, setShowFlashcardFolderForm] = useState(false);
+  const [editingFlashcard, setEditingFlashcard] = useState<Flashcard | null>(null);
+  const [showStudyMode, setShowStudyMode] = useState(false);
+  const [studyFlashcards, setStudyFlashcards] = useState<Flashcard[]>([]);
+  const [viewMode, setViewMode] = useState<'notes' | 'flashcards'>('notes');
+  const [newFlashcardFolder, setNewFlashcardFolder] = useState({ name: '', description: '' });
+  const [notesTypeFilter, setNotesTypeFilter] = useState<'all' | 'notes' | 'flashcards'>('all');
+  const [showFlashcardReview, setShowFlashcardReview] = useState(false);
+  const [reviewingFlashcard, setReviewingFlashcard] = useState<Flashcard | null>(null);
 
   // Derived, memoized notes list filtered by folder and sorted by selection
   const visibleSortedNotes = useMemo(() => {
@@ -256,14 +388,18 @@ export default function Home() {
     const loadNotes = async () => {
       try {
         setLoading(true);
-        const [fetchedNotes, fetchedFolders] = await Promise.all([
+        const [fetchedNotes, fetchedFolders, fetchedFlashcards, fetchedFlashcardFolders] = await Promise.all([
           fetchNotes(token),
           fetch(`${getApiBaseUrl()}/folders/`, {
             headers: getAuthHeaders(token),
-          }).then(r => r.json())
+          }).then(r => r.json()),
+          fetchFlashcards(token),
+          fetchFlashcardFolders(token)
         ]);
         setNotes(fetchedNotes);
         setFolders(fetchedFolders);
+        setFlashcards(fetchedFlashcards);
+        setFlashcardFolders(fetchedFlashcardFolders);
         setError(null);
 
         // Prefetch first images to warm cache
@@ -401,7 +537,7 @@ export default function Home() {
           const folderIdsToRemove = removeFolderAndSubfolders(folderId, folders);
           setFolders(prev => prev.filter(f => !folderIdsToRemove.includes(f.id)));
           // Remove all notes that were in any of the deleted folders
-          setNotes(prev => prev.filter(n => !folderIdsToRemove.includes(n.folder)));
+          setNotes(prev => prev.filter(n => !n.folder || !folderIdsToRemove.includes(n.folder as number)));
         } catch (e) {
           console.error(e);
           setError('Failed to delete folder.');
@@ -479,7 +615,7 @@ export default function Home() {
       const folderIdsToRemove = removeFolderAndSubfolders(folderId, folders);
       setFolders(prev => prev.filter(f => !folderIdsToRemove.includes(f.id)));
       // Remove all notes that were in any of the deleted folders
-      setNotes(prev => prev.filter(n => !folderIdsToRemove.includes(n.folder)));
+      setNotes(prev => prev.filter(n => !n.folder || !folderIdsToRemove.includes(n.folder as number)));
     } catch (e) {
       console.error(e);
       setError('Failed to move folder to trash.');
@@ -513,6 +649,119 @@ export default function Home() {
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? e.message : 'Failed to move folder.');
+    }
+  };
+
+  // Flashcard handlers
+  const handleCreateFlashcard = async (flashcardData: { front: string; back: string; difficulty: string; folder?: number | null; tag_ids?: number[] }) => {
+    if (!token) return;
+    try {
+      const createdFlashcard = await createFlashcard(flashcardData, token);
+      setFlashcards([createdFlashcard, ...flashcards]);
+      setShowFlashcardForm(false);
+      setError(null);
+    } catch (err) {
+      setError('Failed to create flashcard. Please try again.');
+      console.error('Error creating flashcard:', err);
+    }
+  };
+
+  const handleUpdateFlashcard = async (flashcardData: { front: string; back: string; difficulty: string; folder?: number | null; tag_ids?: number[] }) => {
+    if (!token || !editingFlashcard) return;
+    try {
+      const updatedFlashcard = await updateFlashcard(editingFlashcard.id, flashcardData, token);
+      setFlashcards(flashcards.map(f => f.id === editingFlashcard.id ? updatedFlashcard : f));
+      setEditingFlashcard(null);
+      setError(null);
+    } catch (err) {
+      setError('Failed to update flashcard. Please try again.');
+      console.error('Error updating flashcard:', err);
+    }
+  };
+
+  const handleDeleteFlashcard = async (id: number) => {
+    if (!token) return;
+    try {
+      await deleteFlashcard(id, token);
+      setFlashcards(flashcards.filter(f => f.id !== id));
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete flashcard. Please try again.');
+      console.error('Error deleting flashcard:', err);
+    }
+  };
+
+  const handleReviewFlashcard = async (cardId: number, qualityRating: number) => {
+    if (!token) return;
+    try {
+      const updatedFlashcard = await reviewFlashcard(cardId, qualityRating, token);
+      setFlashcards(flashcards.map(f => f.id === cardId ? updatedFlashcard : f));
+      setError(null);
+    } catch (err) {
+      setError('Failed to record review. Please try again.');
+      console.error('Error recording review:', err);
+    }
+  };
+
+  const handleStudyFlashcards = (cardsToStudy: Flashcard[]) => {
+    setStudyFlashcards(cardsToStudy);
+    setShowStudyMode(true);
+  };
+
+  const handleEditFlashcard = (flashcard: Flashcard) => {
+    setEditingFlashcard(flashcard);
+    setShowFlashcardForm(true);
+  };
+
+  const handleOpenFlashcardReview = (flashcard: Flashcard) => {
+    setReviewingFlashcard(flashcard);
+    setShowFlashcardReview(true);
+  };
+
+  // Flashcard folder handlers
+  const handleCreateFlashcardFolder = async () => {
+    if (newFlashcardFolder.name.trim() && token) {
+      try {
+        const createdFolder = await createFlashcardFolder({
+          name: newFlashcardFolder.name.trim(),
+          description: newFlashcardFolder.description.trim() || undefined,
+          parent_folder: activeFlashcardFolder
+        }, token);
+        
+        setFlashcardFolders([createdFolder, ...flashcardFolders]);
+        setNewFlashcardFolder({ name: '', description: '' });
+        setShowFlashcardFolderForm(false);
+        setError(null);
+      } catch (err) {
+        setError('Failed to create flashcard folder. Please try again.');
+        console.error('Error creating flashcard folder:', err);
+      }
+    }
+  };
+
+  const handleDeleteFlashcardFolder = async (id: number) => {
+    if (!token) return;
+    try {
+      await deleteFlashcardFolder(id, token);
+      setFlashcardFolders(flashcardFolders.filter(f => f.id !== id));
+      // Also remove flashcards in this folder
+      setFlashcards(flashcards.filter(f => f.folder !== id));
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete flashcard folder. Please try again.');
+      console.error('Error deleting flashcard folder:', err);
+    }
+  };
+
+  const handleMoveFlashcardFolderToNoteFolder = async (flashcardFolderId: number, targetFolderId: number | null) => {
+    if (!token) return;
+    try {
+      const updatedFolder = await moveFlashcardFolderToNoteFolder(flashcardFolderId, targetFolderId, token);
+      setFlashcardFolders(flashcardFolders.map(f => f.id === flashcardFolderId ? updatedFolder : f));
+      setError(null);
+    } catch (err) {
+      setError('Failed to move flashcard folder. Please try again.');
+      console.error('Error moving flashcard folder:', err);
     }
   };
 
@@ -617,7 +866,7 @@ export default function Home() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search notes by title or tag..."
+          placeholder="Search all content..."
           className="form-input"
           style={{ flex: 1, marginRight: '1rem' }}
         />
@@ -646,11 +895,18 @@ export default function Home() {
                 >
                   Folder
                 </div>
+                <div 
+                  className="dropdown-option"
+                  onClick={() => { setShowFlashcardFolderForm(true); setNewDropdownOpen(false); }}
+                >
+                  Flashcard Folder
+                </div>
               </div>
             )}
           </div>
         </div>
-        
+
+        {/* Notes Type Filter */}
         <div style={{ marginLeft: '1rem', position: 'relative' }}>
           <div 
             className="custom-select"
@@ -658,65 +914,30 @@ export default function Home() {
             style={{ position: 'relative' }}
           >
             <div className="sort-select">
-              {sortBy === 'newest' && 'Most recent (created)'}
-              {sortBy === 'oldest' && 'Least recent (created)'}
-              {sortBy === 'updated_desc' && 'Most recent (updated)'}
-              {sortBy === 'updated_asc' && 'Least recent (updated)'}
-              {sortBy === 'title_asc' && 'Title (A–Z)'}
-              {sortBy === 'title_desc' && 'Title (Z–A)'}
-              {sortBy === 'tag_asc' && 'Tag (A–Z)'}
-              {sortBy === 'tag_desc' && 'Tag (Z–A)'}
+              {notesTypeFilter === 'all' && '📝 All Content'}
+              {notesTypeFilter === 'notes' && '📄 Notes Only'}
+              {notesTypeFilter === 'flashcards' && '🎴 Flashcards Only'}
               <span style={{ marginLeft: '0.5rem' }}>▼</span>
             </div>
             {dropdownOpen && (
               <div className="custom-dropdown">
                 <div 
-                  className={`dropdown-option ${sortBy === 'newest' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('newest'); setDropdownOpen(false); }}
+                  className={`dropdown-option ${notesTypeFilter === 'all' ? 'selected' : ''}`}
+                  onClick={() => { setNotesTypeFilter('all'); setDropdownOpen(false); }}
                 >
-                  Most recent (created)
+                  📝 All Content
                 </div>
                 <div 
-                  className={`dropdown-option ${sortBy === 'oldest' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('oldest'); setDropdownOpen(false); }}
+                  className={`dropdown-option ${notesTypeFilter === 'notes' ? 'selected' : ''}`}
+                  onClick={() => { setNotesTypeFilter('notes'); setDropdownOpen(false); }}
                 >
-                  Least recent (created)
+                  📄 Notes Only
                 </div>
                 <div 
-                  className={`dropdown-option ${sortBy === 'updated_desc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('updated_desc'); setDropdownOpen(false); }}
+                  className={`dropdown-option ${notesTypeFilter === 'flashcards' ? 'selected' : ''}`}
+                  onClick={() => { setNotesTypeFilter('flashcards'); setDropdownOpen(false); }}
                 >
-                  Most recent (updated)
-                </div>
-                <div 
-                  className={`dropdown-option ${sortBy === 'updated_asc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('updated_asc'); setDropdownOpen(false); }}
-                >
-                  Least recent (updated)
-                </div>
-                <div 
-                  className={`dropdown-option ${sortBy === 'title_asc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('title_asc'); setDropdownOpen(false); }}
-                >
-                  Title (A–Z)
-                </div>
-                <div 
-                  className={`dropdown-option ${sortBy === 'title_desc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('title_desc'); setDropdownOpen(false); }}
-                >
-                  Title (Z–A)
-                </div>
-                <div 
-                  className={`dropdown-option ${sortBy === 'tag_asc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('tag_asc'); setDropdownOpen(false); }}
-                >
-                  Tag (A–Z)
-                </div>
-                <div 
-                  className={`dropdown-option ${sortBy === 'tag_desc' ? 'selected' : ''}`}
-                  onClick={() => { setSortBy('tag_desc'); setDropdownOpen(false); }}
-                >
-                  Tag (Z–A)
+                  🎴 Flashcards Only
                 </div>
               </div>
             )}
@@ -745,6 +966,16 @@ export default function Home() {
               }
             }
             
+            // Check if it's a flashcard folder being dragged
+            const flashcardFolderDragData = e.dataTransfer.getData('application/x-flashcard-folder');
+            if (flashcardFolderDragData) {
+              const { type, id } = JSON.parse(flashcardFolderDragData);
+              if (type === 'flashcard-folder') {
+                handleMoveFlashcardFolderToNoteFolder(parseInt(id), null); // Move to root level
+                return;
+              }
+            }
+            
             // Handle note dragging (existing logic)
             const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
             if (!raw) return;
@@ -765,6 +996,23 @@ export default function Home() {
           <button className="note-action-btn" onClick={() => setActiveFolder(null)}>← Back</button>
           <span style={{ color: 'var(--text-muted)' }}>
             .{getFolderPath(activeFolder).map(folder => `/${folder.name}`).join('')}
+          </span>
+        </div>
+      )}
+
+      {activeFlashcardFolder && (
+        <div className="breadcrumb-container">
+          <button 
+            className="note-action-btn" 
+            onClick={() => {
+              setActiveFlashcardFolder(null);
+              setActiveFolder(null);
+            }}
+          >
+            ← Back
+          </button>
+          <span style={{ color: 'var(--text-muted)' }}>
+            .{flashcardFolders.find(f => f.id === activeFlashcardFolder)?.name}
           </span>
         </div>
       )}
@@ -867,7 +1115,162 @@ export default function Home() {
         </div>
       )}
 
-      <div className="notes-grid">
+      {notesTypeFilter === 'flashcards' ? (
+        <div className="flashcard-view">
+          {/* Flashcard Folder Breadcrumbs */}
+          {activeFlashcardFolder && (
+            <div className="breadcrumb-container">
+              <button 
+                className="breadcrumb-btn"
+                onClick={() => setActiveFlashcardFolder(null)}
+              >
+                🎴 All Flashcard Folders
+              </button>
+              <span className="breadcrumb-separator">/</span>
+              <span className="breadcrumb-current">
+                {flashcardFolders.find(f => f.id === activeFlashcardFolder)?.name}
+              </span>
+            </div>
+          )}
+
+          {/* Flashcard Folders Grid */}
+          <div className="notes-grid">
+            {/* Show flashcard folders */}
+            {flashcardFolders
+              .filter(f => {
+                if (activeFlashcardFolder === null) {
+                  // Only show flashcard folders that are assigned to the current note folder context
+                  return !f.parent_folder && (
+                    (activeFolder === null ? (f.note_folder === null || f.note_folder === undefined) : f.note_folder === activeFolder)
+                  );
+                }
+                return f.parent_folder === activeFlashcardFolder;
+              })
+              .map((folder) => (
+                <div key={`flashcard-folder-${folder.id}`} 
+                     className="note-card"
+                     onClick={() => setActiveFlashcardFolder(folder.id)}>
+                  <h2 className="note-title">📁 {folder.name}</h2>
+                  <div className="note-meta">
+                    <span className="note-date">Flashcard Folder</span>
+                    <div className="note-actions">
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveFlashcardFolder(folder.id); setShowFlashcardForm(true); }}
+                      >
+                        Add Card
+                      </button>
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteFlashcardFolder(folder.id); }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {folder.description && (
+                    <p className="note-content">{folder.description}</p>
+                  )}
+                </div>
+              ))}
+
+            {/* Show flashcards in current folder */}
+            {flashcards
+              .filter(f => {
+                const q = searchQuery.trim().toLowerCase();
+                const matchesSearch = !q || f.front.toLowerCase().includes(q) || f.back.toLowerCase().includes(q);
+                const matchesFolder = activeFlashcardFolder === null ? !f.folder : f.folder === activeFlashcardFolder;
+                return matchesSearch && matchesFolder;
+              })
+              .map((flashcard) => (
+                <div key={`flashcard-${flashcard.id}`} className="note-card" onClick={() => handleOpenFlashcardReview(flashcard)}>
+                  <h2 className="note-title">
+                    🎴 <LaTeXRenderer content={flashcard.front} />
+                  </h2>
+                  <div className="note-meta">
+                    <span className="note-date">
+                      {flashcard.difficulty}
+                    </span>
+                    <div className="note-actions">
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleEditFlashcard(flashcard);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteFlashcard(flashcard.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="note-content">
+                    <LaTeXRenderer content={flashcard.back} />
+                  </div>
+                </div>
+              ))}
+
+            {/* Empty state */}
+            {flashcardFolders.filter(f => {
+              if (activeFlashcardFolder === null) {
+                return !f.parent_folder && (
+                  (activeFolder === null ? (f.note_folder === null || f.note_folder === undefined) : f.note_folder === activeFolder)
+                );
+              }
+              return f.parent_folder === activeFlashcardFolder;
+            }).length === 0 && 
+             flashcards.filter(f => {
+               const q = searchQuery.trim().toLowerCase();
+               const matchesSearch = !q || f.front.toLowerCase().includes(q) || f.back.toLowerCase().includes(q);
+               const matchesFolder = activeFlashcardFolder === null ? !f.folder : f.folder === activeFlashcardFolder;
+               return matchesSearch && matchesFolder;
+             }).length === 0 && (
+              <div className="notes-empty">
+                <div className="notes-empty-icon">🎴</div>
+                <h3 className="notes-empty-title">No flashcard folders or cards yet</h3>
+                <p className="notes-empty-text">Create your first flashcard folder to get started!</p>
+              </div>
+            )}
+          </div>
+
+          {/* Study Actions */}
+          <div className="study-actions" style={{ marginTop: '2rem' }}>
+            {flashcards.filter(f => f.is_due_for_review).length > 0 && (
+              <button 
+                className="study-btn study-due"
+                onClick={() => handleStudyFlashcards(flashcards.filter(f => f.is_due_for_review))}
+              >
+                📚 Study Due Cards ({flashcards.filter(f => f.is_due_for_review).length})
+              </button>
+            )}
+            {flashcards.filter(f => f.repetitions === 0).length > 0 && (
+              <button 
+                className="study-btn study-new"
+                onClick={() => handleStudyFlashcards(flashcards.filter(f => f.repetitions === 0))}
+              >
+                🆕 Study New Cards ({flashcards.filter(f => f.repetitions === 0).length})
+              </button>
+            )}
+            <button 
+              className="study-btn study-all"
+              onClick={() => handleStudyFlashcards(flashcards)}
+            >
+              📖 Study All Cards ({flashcards.length})
+            </button>
+          </div>
+        </div>
+      ) : notesTypeFilter === 'notes' ? (
+        <div className="notes-grid">
         {/* Folders (filtered by context) - Always show if they exist */}
         {folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).map((folder) => (
           <div key={`folder-${folder.id}`} 
@@ -892,6 +1295,16 @@ export default function Home() {
                    const { type, id } = JSON.parse(folderDragData);
                    if (type === 'folder') {
                      moveFolderToFolder(parseInt(id), folder.id);
+                     return;
+                   }
+                 }
+                 
+                 // Check if it's a flashcard folder being dragged
+                 const flashcardFolderDragData = e.dataTransfer.getData('application/x-flashcard-folder');
+                 if (flashcardFolderDragData) {
+                   const { type, id } = JSON.parse(flashcardFolderDragData);
+                   if (type === 'flashcard-folder') {
+                     handleMoveFlashcardFolderToNoteFolder(parseInt(id), folder.id);
                      return;
                    }
                  }
@@ -1015,7 +1428,332 @@ export default function Home() {
             <p className="notes-empty-text">Create your first note to get started!</p>
           </div>
         )}
-      </div>
+        </div>
+      ) : (
+        <div className="all-content-view">
+          {/* Flashcard Folder Indicator */}
+          {activeFlashcardFolder && (
+            <div className="flashcard-folder-indicator">
+              <span className="folder-icon">🎴📁</span>
+              <span className="folder-name">
+                {flashcardFolders.find(f => f.id === activeFlashcardFolder)?.name}
+              </span>
+            </div>
+          )}
+
+          {/* Show both notes and flashcards */}
+          <div className="notes-grid">
+            {/* Regular folders - only show when not in a flashcard folder */}
+            {!activeFlashcardFolder && folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).map((folder) => (
+              <div key={`folder-${folder.id}`} 
+                   className={`note-card ${dragOverFolder === folder.id ? 'drag-over' : ''}`}
+                   draggable
+                   onClick={() => setActiveFolder(folder.id)}
+                   onDragStart={(e) => {
+                     e.dataTransfer.setData('application/x-note-or-folder', JSON.stringify({ type: 'folder', id: folder.id }));
+                     e.dataTransfer.setData('text/plain', `folder-${folder.id}`);
+                   }}
+                   onDragOver={(e) => {
+                     e.preventDefault();
+                     setDragOverFolder(folder.id);
+                   }}
+                   onDragLeave={() => setDragOverFolder(null)}
+                   onDrop={(e) => {
+                     setDragOverFolder(null);
+                     
+                     // Check if it's a folder being dragged
+                     const folderDragData = e.dataTransfer.getData('application/x-note-or-folder');
+                     if (folderDragData) {
+                       const { type, id } = JSON.parse(folderDragData);
+                       if (type === 'folder') {
+                         moveFolderToFolder(parseInt(id), folder.id);
+                         return;
+                       }
+                     }
+                     
+                     // Check if it's a flashcard folder being dragged
+                     const flashcardFolderDragData = e.dataTransfer.getData('application/x-flashcard-folder');
+                     if (flashcardFolderDragData) {
+                       const { type, id } = JSON.parse(flashcardFolderDragData);
+                       if (type === 'flashcard-folder') {
+                         handleMoveFlashcardFolderToNoteFolder(parseInt(id), folder.id);
+                         return;
+                       }
+                     }
+                     
+                     // Handle note dragging (existing logic)
+                     const raw = e.dataTransfer.getData('application/x-note-id') || e.dataTransfer.getData('text/plain');
+                     if (!raw) return;
+                     let noteId = raw.trim();
+                     try {
+                       const url = new URL(noteId);
+                       const parts = url.pathname.split('/').filter(Boolean);
+                       noteId = parts[parts.length - 1] || noteId;
+                     } catch (_) {
+                       if (noteId.includes('/')) {
+                         const parts = noteId.split('/').filter(Boolean);
+                         noteId = parts[parts.length - 1];
+                       }
+                     }
+                     if (noteId) moveNoteToFolder(noteId, folder.id);
+                   }}>
+                <h2 className="note-title">📁 {folder.name}</h2>
+                <div className="note-meta">
+                  <span className="note-date">Folder</span>
+                  <div className="note-actions">
+                    <button className="note-action-btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteFolder(folder.id); }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Flashcard folders */}
+            {flashcardFolders
+              .filter(f => {
+                // Show root folders when no active folder
+                if (activeFlashcardFolder === null) {
+                  // Only show flashcard folders that are assigned to the current note folder context
+                  // If we're in root (activeFolder === null), show flashcard folders not assigned to any note folder
+                  // If we're in a specific folder (activeFolder !== null), show flashcard folders assigned to that folder
+                  return !f.parent_folder && (
+                    (activeFolder === null ? (f.note_folder === null || f.note_folder === undefined) : f.note_folder === activeFolder)
+                  );
+                }
+                // Show subfolders of the active folder
+                return f.parent_folder === activeFlashcardFolder;
+              })
+              .map((folder) => (
+                <div key={`flashcard-folder-${folder.id}`} 
+                     className="note-card"
+                     draggable
+                     onClick={() => setActiveFlashcardFolder(folder.id)}
+                     onDragStart={(e) => {
+                       e.dataTransfer.setData('application/x-flashcard-folder', JSON.stringify({ type: 'flashcard-folder', id: folder.id }));
+                       e.dataTransfer.setData('text/plain', `flashcard-folder-${folder.id}`);
+                     }}>
+                  <h2 className="note-title">🎴📁 {folder.name}</h2>
+                  <div className="note-meta">
+                    <span className="note-date">Flashcard Folder</span>
+                    <div className="note-actions">
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveFlashcardFolder(folder.id); setShowFlashcardForm(true); }}
+                      >
+                        Add Card
+                      </button>
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteFlashcardFolder(folder.id); }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {folder.description && (
+                    <p className="note-content">{folder.description}</p>
+                  )}
+                </div>
+              ))}
+
+            {/* Notes - only show when not in a flashcard folder */}
+            {!activeFlashcardFolder && visibleSortedNotes.map((note) => (
+              <Link key={note.id} href={`/notes/${note.unique_id}`} className="note-card-link">
+                <div className="note-card" draggable
+                     onDragStart={(e) => {
+                       e.dataTransfer.setData('application/x-note-id', note.unique_id);
+                       e.dataTransfer.setData('application/x-note-or-folder', JSON.stringify({ type: 'note', id: note.unique_id }));
+                       e.dataTransfer.setData('text/plain', note.unique_id);
+                     }}>
+                  {(() => {
+                    const img = getFirstImage(note.content || '');
+                    if (img) {
+                      return (
+                        <div className="note-card-media note-card-media-image">
+                          <img 
+                            src={img.src}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      );
+                    }
+                    // No image — show a blank spacer to keep uniform height
+                    return (
+                      <div className="note-card-media note-card-media-blank" aria-hidden="true" />
+                    );
+                  })()}
+                  <div className="note-card-content">
+                    <h2 className="note-title">{note.title}</h2>
+                    <div className="note-meta">
+                      <span className="note-date">{new Date(note.created_at).toLocaleDateString()}</span>
+                      <div className="note-actions">
+                        <button 
+                          className="note-action-btn"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // Edit functionality will be handled on detail page
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="note-action-btn"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteNote(note.unique_id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+
+            {/* Flashcards */}
+            {flashcards
+              .filter(f => {
+                const q = searchQuery.trim().toLowerCase();
+                const matchesSearch = !q || f.front.toLowerCase().includes(q) || f.back.toLowerCase().includes(q);
+                const matchesFolder = activeFlashcardFolder === null ? !f.folder : f.folder === activeFlashcardFolder;
+                return matchesSearch && matchesFolder;
+              })
+              .map((flashcard) => (
+                <div key={`flashcard-${flashcard.id}`} className="note-card" onClick={() => handleOpenFlashcardReview(flashcard)}>
+                  <h2 className="note-title">
+                    🎴 <LaTeXRenderer content={flashcard.front} />
+                  </h2>
+                  <div className="note-meta">
+                    <span className="note-date">
+                      {flashcard.difficulty}
+                    </span>
+                    <div className="note-actions">
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleEditFlashcard(flashcard);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="note-action-btn" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteFlashcard(flashcard.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="note-content">
+                    <LaTeXRenderer content={flashcard.back} />
+                  </div>
+                </div>
+              ))}
+
+            {/* Empty state */}
+            {(() => {
+              const hasRegularFolders = !activeFlashcardFolder && folders.filter(f => (activeFolder === null ? !f.parent_folder : f.parent_folder === activeFolder)).length > 0;
+              const hasFlashcardFolders = flashcardFolders.filter(f => {
+                if (activeFlashcardFolder === null) {
+                  return !f.parent_folder && (
+                    (activeFolder === null ? (f.note_folder === null || f.note_folder === undefined) : f.note_folder === activeFolder)
+                  );
+                }
+                return f.parent_folder === activeFlashcardFolder;
+              }).length > 0;
+              const hasNotes = !activeFlashcardFolder && notes.filter(n => (activeFolder === null ? !n.folder : n.folder === activeFolder)).length > 0;
+              const hasFlashcards = flashcards.filter(f => {
+                const matchesFolder = activeFlashcardFolder === null ? !f.folder : f.folder === activeFlashcardFolder;
+                return matchesFolder;
+              }).length > 0;
+              
+              const hasAnyContent = hasRegularFolders || hasFlashcardFolders || hasNotes || hasFlashcards;
+              
+              if (!hasAnyContent && !loading) {
+                return (
+                  <div className="notes-empty">
+                    <div className="notes-empty-icon">
+                      {activeFlashcardFolder ? '🎴' : '📝'}
+                    </div>
+                    <h3 className="notes-empty-title">
+                      {activeFlashcardFolder ? 'No flashcard content yet' : 'No content yet'}
+                    </h3>
+                    <p className="notes-empty-text">
+                      {activeFlashcardFolder 
+                        ? 'Create your first flashcard in this folder!' 
+                        : 'Create your first note or flashcard folder to get started!'
+                      }
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+
+          {/* Add Card Button - only show when inside a flashcard folder */}
+          {activeFlashcardFolder && (
+            <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+              <button 
+                className="add-note-btn"
+                onClick={() => setShowFlashcardForm(true)}
+              >
+                + Add New Flashcard
+              </button>
+            </div>
+          )}
+
+          {/* Study Actions for All Content View */}
+          {(() => {
+            const currentFlashcards = flashcards.filter(f => {
+              const matchesFolder = activeFlashcardFolder === null ? !f.folder : f.folder === activeFlashcardFolder;
+              return matchesFolder;
+            });
+            
+            return currentFlashcards.length > 0 && (
+              <div className="study-actions" style={{ marginTop: '2rem' }}>
+                {currentFlashcards.filter(f => f.is_due_for_review).length > 0 && (
+                  <button 
+                    className="study-btn study-due"
+                    onClick={() => handleStudyFlashcards(currentFlashcards.filter(f => f.is_due_for_review))}
+                  >
+                    📚 Study Due Cards ({currentFlashcards.filter(f => f.is_due_for_review).length})
+                  </button>
+                )}
+                {currentFlashcards.filter(f => f.repetitions === 0).length > 0 && (
+                  <button 
+                    className="study-btn study-new"
+                    onClick={() => handleStudyFlashcards(currentFlashcards.filter(f => f.repetitions === 0))}
+                  >
+                    🆕 Study New Cards ({currentFlashcards.filter(f => f.repetitions === 0).length})
+                  </button>
+                )}
+                <button 
+                  className="study-btn study-all"
+                  onClick={() => handleStudyFlashcards(currentFlashcards)}
+                >
+                  📖 Study All Cards ({currentFlashcards.length})
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
 
       {/* Custom Confirmation Modal */}
       {confirmModal.show && (
@@ -1094,6 +1832,97 @@ export default function Home() {
         >
           🗑️
         </div>
+      )}
+
+      {/* Flashcard Folder Form */}
+      {showFlashcardFolderForm && (
+        <div className="form-overlay" onClick={() => setShowFlashcardFolderForm(false)}>
+          <div className="form-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Create New Flashcard Folder</h2>
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateFlashcardFolder(); }}>
+              <div className="form-group">
+                <label htmlFor="folder-name">Folder Name</label>
+                <input
+                  id="folder-name"
+                  type="text"
+                  value={newFlashcardFolder.name}
+                  onChange={(e) => setNewFlashcardFolder(prev => ({ ...prev, name: e.target.value }))}
+                  className="form-input"
+                  placeholder="Enter folder name..."
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="folder-description">Description (Optional)</label>
+                <textarea
+                  id="folder-description"
+                  value={newFlashcardFolder.description}
+                  onChange={(e) => setNewFlashcardFolder(prev => ({ ...prev, description: e.target.value }))}
+                  className="form-textarea"
+                  placeholder="Enter folder description..."
+                  rows={3}
+                />
+              </div>
+              <div className="form-actions">
+                <button 
+                  type="button" 
+                  onClick={() => setShowFlashcardFolderForm(false)} 
+                  className="cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="save-btn"
+                  disabled={!newFlashcardFolder.name.trim()}
+                >
+                  Create Folder
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Flashcard Form */}
+      {showFlashcardForm && (
+        <FlashcardForm
+          onSubmit={editingFlashcard ? handleUpdateFlashcard : handleCreateFlashcard}
+          onCancel={() => {
+            setShowFlashcardForm(false);
+            setEditingFlashcard(null);
+          }}
+          initialData={editingFlashcard ? {
+            front: editingFlashcard.front,
+            back: editingFlashcard.back,
+            difficulty: editingFlashcard.difficulty,
+            folder: editingFlashcard.folder,
+            tag_ids: editingFlashcard.tags.map(t => t.id)
+          } : undefined}
+          folders={flashcardFolders}
+          tags={[]} // We'll need to fetch tags separately
+          activeFolder={activeFlashcardFolder}
+        />
+      )}
+
+      {/* Study Mode */}
+      {showStudyMode && (
+        <StudyMode
+          flashcards={studyFlashcards}
+          onReview={handleReviewFlashcard}
+          onClose={() => setShowStudyMode(false)}
+        />
+      )}
+
+      {/* Flashcard Review */}
+      {showFlashcardReview && reviewingFlashcard && (
+        <FlashcardReview
+          flashcard={reviewingFlashcard}
+          onClose={() => {
+            setShowFlashcardReview(false);
+            setReviewingFlashcard(null);
+          }}
+        />
       )}
     </div>
   );
