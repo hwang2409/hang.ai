@@ -899,7 +899,7 @@ export default function Home() {
                   className="dropdown-option"
                   onClick={() => { setShowFlashcardFolderForm(true); setNewDropdownOpen(false); }}
                 >
-                  Flashcard Folder
+                  Flashcard
                 </div>
               </div>
             )}
@@ -915,8 +915,8 @@ export default function Home() {
           >
             <div className="sort-select">
               {notesTypeFilter === 'all' && '📝 All Content'}
-              {notesTypeFilter === 'notes' && '📄 Notes Only'}
-              {notesTypeFilter === 'flashcards' && '🎴 Flashcards Only'}
+              {notesTypeFilter === 'notes' && '📄 Notes'}
+              {notesTypeFilter === 'flashcards' && '🎴 Flashcards'}
               <span style={{ marginLeft: '0.5rem' }}>▼</span>
             </div>
             {dropdownOpen && (
@@ -931,13 +931,13 @@ export default function Home() {
                   className={`dropdown-option ${notesTypeFilter === 'notes' ? 'selected' : ''}`}
                   onClick={() => { setNotesTypeFilter('notes'); setDropdownOpen(false); }}
                 >
-                  📄 Notes Only
+                  📄 Notes
                 </div>
                 <div 
                   className={`dropdown-option ${notesTypeFilter === 'flashcards' ? 'selected' : ''}`}
                   onClick={() => { setNotesTypeFilter('flashcards'); setDropdownOpen(false); }}
                 >
-                  🎴 Flashcards Only
+                  🎴 Flashcards
                 </div>
               </div>
             )}
