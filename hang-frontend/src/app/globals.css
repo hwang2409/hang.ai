@@ -2241,17 +2241,20 @@ body {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 1rem;
 }
 
-.user-info {
+.notes-header .user-info {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.user-name {
+.notes-header .user-name {
   color: var(--text-muted);
   font-size: 0.875rem;
+  font-weight: normal;
+  margin: 0;
 }
 
 .logout-btn {
@@ -2281,6 +2284,16 @@ body {
   .header-right {
     width: 100%;
     justify-content: space-between;
+  }
+  
+  .notes-tabs {
+    margin: 1rem 0;
+    gap: 0.25rem;
+  }
+  
+  .tab-btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.8rem;
   }
   
   .auth-buttons {
@@ -3498,4 +3511,675 @@ body {
   margin: 0.5rem 0;
   font-size: 0.85em;
   font-family: "Times New Roman", Times, serif !important;
+}
+
+
+/* Sharing Components Styles */
+.share-note-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.share-note-content {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.share-note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.share-note-header h2 {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.share-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.share-close-btn:hover {
+  background: var(--card-hover);
+  color: var(--foreground);
+}
+
+.share-note-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.note-info h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.1rem;
+  padding: 0.75rem;
+  background: var(--card-hover);
+  border-radius: 0.5rem;
+  border: 1px solid var(--card-border);
+}
+
+.user-results {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
+  background: var(--card-bg);
+}
+
+.user-option {
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--card-border);
+  transition: background-color 0.2s ease;
+}
+
+.user-option:last-child {
+  border-bottom: none;
+}
+
+.user-option:hover {
+  background: var(--card-hover);
+}
+
+.user-option.selected {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.share-note-content .user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.share-note-content .user-name {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.user-email {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.user-option.selected .user-name,
+.user-option.selected .user-email {
+  color: var(--accent-foreground);
+}
+
+.share-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--card-border);
+}
+
+.notes-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--foreground);
+  background: var(--card-hover);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--card-hover);
+}
+
+.shared-notes-content {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.shared-note {
+  position: relative;
+}
+
+.shared-note::before {
+  content: "📤";
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+.shared-note-info {
+  margin-top: 0.5rem;
+}
+
+.shared-by {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Share Note Component Styles */
+.share-note-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.share-note-content {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.share-note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.share-note-header h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: var(--card-hover);
+  color: var(--foreground);
+}
+
+.share-note-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.note-info h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.125rem;
+  font-weight: 500;
+  padding: 0.75rem;
+  background: var(--card-hover);
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--accent);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.user-search-container {
+  position: relative;
+}
+
+.user-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.user-option {
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--card-border);
+  transition: background-color 0.2s ease;
+}
+
+.user-option:last-child {
+  border-bottom: none;
+}
+
+.user-option:hover,
+.user-option.selected {
+  background: var(--card-hover);
+}
+
+.shared-note-card .user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.shared-note-card .user-name {
+  font-weight: 500;
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.user-email {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.selected-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: var(--card-hover);
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+}
+
+.remove-user-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.25rem;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.remove-user-btn:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Shared Notes Component Styles */
+.shared-notes-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+
+.shared-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shared-notes-header h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.shared-notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+
+.shared-note-card {
+  background: var(--card-hover);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.shared-note-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.shared-note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.shared-note-header .note-title {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.shared-note-header .note-title a {
+  color: var(--foreground);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.125rem;
+  transition: color 0.2s ease;
+}
+
+.shared-note-header .note-title a:hover {
+  color: var(--accent);
+}
+
+.permission-badge {
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.shared-note-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.shared-note-meta > div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.shared-note-meta .label {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  min-width: 80px;
+}
+
+.shared-note-meta .value {
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.share-message {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--accent);
+}
+
+.share-message .label {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.share-message .value {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .share-note-content,
+  .shared-notes-content {
+    margin: 1rem;
+    padding: 1.5rem;
+    max-width: none;
+  }
+  
+  
+  .shared-note-meta > div {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .shared-note-meta .label {
+    min-width: auto;
+  }
+}
+
+
+.shared-notes-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+
+.shared-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.shared-notes-header h2 {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.shared-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.shared-close-btn:hover {
+  background: var(--card-hover);
+  color: var(--foreground);
+}
+
+.shared-notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+
+.shared-note-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.shared-note-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+}
+
+.shared-note-card .note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.shared-note-card .note-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.permission-badge {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.shared-note-card .note-content {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.shared-note-card .note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.shared-note-card .tag {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.shared-note-card .note-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.shared-by {
+  font-weight: 500;
+}
+
+.share-message {
+  font-style: italic;
+  background: var(--card-hover);
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  border-left: 3px solid var(--accent);
 }

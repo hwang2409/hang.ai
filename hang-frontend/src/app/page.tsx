@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import ShareNote from '../components/ShareNote';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { useAuth } from '../contexts/AuthContext';
 import { getAuthHeaders } from '../contexts/AuthContext';
@@ -163,6 +164,14 @@ const fetchFlashcardFolders = async (token: string | null): Promise<FlashcardFol
     headers: getAuthHeaders(token),
   });
   if (!response.ok) throw new Error('Failed to fetch flashcard folders');
+  return response.json();
+};
+
+const fetchSharedNotes = async (token: string | null): Promise<Note[]> => {
+  const response = await fetch(`${getApiBaseUrl()}/note-shares/shared_with_me/`, {
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch shared notes');
   return response.json();
 };
 
@@ -330,6 +339,14 @@ export default function Home() {
   const [showFlashcardReview, setShowFlashcardReview] = useState(false);
   const [reviewingFlashcard, setReviewingFlashcard] = useState<Flashcard | null>(null);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'my-notes' | 'shared-notes'>('my-notes');
+  const [sharedNotes, setSharedNotes] = useState<Note[]>([]);
+
+  // Sharing state
+  const [showShareNote, setShowShareNote] = useState(false);
+  const [sharingNote, setSharingNote] = useState<Note | null>(null);
+
   // Derived, memoized notes list filtered by folder and sorted by selection
   const visibleSortedNotes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -388,18 +405,20 @@ export default function Home() {
     const loadNotes = async () => {
       try {
         setLoading(true);
-        const [fetchedNotes, fetchedFolders, fetchedFlashcards, fetchedFlashcardFolders] = await Promise.all([
+        const [fetchedNotes, fetchedFolders, fetchedFlashcards, fetchedFlashcardFolders, fetchedSharedNotes] = await Promise.all([
           fetchNotes(token),
           fetch(`${getApiBaseUrl()}/folders/`, {
             headers: getAuthHeaders(token),
           }).then(r => r.json()),
           fetchFlashcards(token),
-          fetchFlashcardFolders(token)
+          fetchFlashcardFolders(token),
+          fetchSharedNotes(token)
         ]);
         setNotes(fetchedNotes);
         setFolders(fetchedFolders);
         setFlashcards(fetchedFlashcards);
         setFlashcardFolders(fetchedFlashcardFolders);
+        setSharedNotes(fetchedSharedNotes);
         setError(null);
 
         // Prefetch first images to warm cache
@@ -708,6 +727,16 @@ export default function Home() {
     setShowStudyMode(true);
   };
 
+  // Sharing handlers
+  const handleShareNote = (note: Note) => {
+    setSharingNote(note);
+    setShowShareNote(true);
+  };
+
+  const handleShareSuccess = () => {
+    console.log('Note shared successfully');
+  };
+
   const handleEditFlashcard = (flashcard: Flashcard) => {
     setEditingFlashcard(flashcard);
     setShowFlashcardForm(true);
@@ -945,6 +974,22 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Notes Tabs */}
+      <div className="notes-tabs">
+        <button 
+          className={`tab-btn ${activeTab === 'my-notes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('my-notes')}
+        >
+          📝 My Notes
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'shared-notes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('shared-notes')}
+        >
+          📤 Shared Notes
+        </button>
+      </div>
+
       {activeFolder !== null && (
         <div 
           className={`breadcrumb-container ${dragOverBreadcrumb ? 'drag-over' : ''}`}
@@ -1115,7 +1160,9 @@ export default function Home() {
         </div>
       )}
 
-      {notesTypeFilter === 'flashcards' ? (
+      {activeTab === 'my-notes' && (
+        <>
+          {notesTypeFilter === 'flashcards' ? (
         <div className="flashcard-view">
           {/* Flashcard Folder Breadcrumbs */}
           {activeFlashcardFolder && (
@@ -1407,6 +1454,16 @@ export default function Home() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      handleShareNote(note);
+                    }}
+                  >
+                    📤 Share
+                  </button>
+                  <button 
+                    className="note-action-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       handleDeleteNote(note.unique_id);
                     }}
                   >
@@ -1600,6 +1657,16 @@ export default function Home() {
                           }}
                         >
                           Edit
+                        </button>
+                        <button 
+                          className="note-action-btn"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleShareNote(note);
+                          }}
+                        >
+                          📤 Share
                         </button>
                         <button 
                           className="note-action-btn"
@@ -1882,6 +1949,54 @@ export default function Home() {
             </form>
           </div>
         </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'shared-notes' && (
+        <div className="shared-notes-content">
+          {sharedNotes.length === 0 ? (
+            <div className="empty-state">
+              <p>No notes have been shared with you yet.</p>
+            </div>
+          ) : (
+            <div className="notes-grid">
+              {sharedNotes.map((note) => (
+                <div key={`shared-${note.id}`} className="note-card shared-note">
+                  <div className="note-card-media note-card-media-blank" aria-hidden="true" />
+                  <h2 className="note-title">{note.title}</h2>
+                  
+                  {/* Tags */}
+                  {note.tags && note.tags.length > 0 && (
+                    <div className="note-tags">
+                      {note.tags.slice(0, 3).map(tag => (
+                        <span 
+                          key={tag.id} 
+                          className="note-tag"
+                          style={{ backgroundColor: tag.color }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                      {note.tags.length > 3 && (
+                        <span className="note-tag-more">
+                          +{note.tags.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="note-meta">
+                    <span className="note-date">{getDate(note.created_at)}</span>
+                    <div className="shared-note-info">
+                      <span className="shared-by">Shared by {(note as any).shared_by?.full_name || 'Unknown'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Flashcard Form */}
@@ -1924,6 +2039,20 @@ export default function Home() {
           }}
         />
       )}
+
+      {/* Share Note */}
+      {showShareNote && sharingNote && (
+        <ShareNote
+          noteId={sharingNote.id}
+          noteTitle={sharingNote.title}
+          onClose={() => {
+            setShowShareNote(false);
+            setSharingNote(null);
+          }}
+          onShare={handleShareSuccess}
+        />
+      )}
+
     </div>
   );
 }

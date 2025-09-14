@@ -6,8 +6,14 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.utils import timezone
-from notes.models import Document, Folder, Tag, Flashcard, FlashcardFolder
-from notes.serializers import DocumentSerializer, FolderSerializer, TagSerializer, FlashcardSerializer, FlashcardFolderSerializer
+from django.db.models import Q
+from notes.models import Document, Folder, Tag, Flashcard, FlashcardFolder, NoteShare, SharedNoteAccess
+from notes.serializers import (
+    DocumentSerializer, FolderSerializer, TagSerializer, FlashcardSerializer, 
+    FlashcardFolderSerializer, NoteShareSerializer, SharedNoteAccessSerializer, 
+    SharedNoteSerializer, UserSerializer
+)
+from accounts.models import User
 
 class DocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -390,4 +396,139 @@ class FlashcardFolderViewSet(viewsets.ModelViewSet):
         folder.save()
         
         serializer = self.get_serializer(folder)
+        return Response(serializer.data)
+
+
+class NoteShareViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing note sharing
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = NoteShareSerializer
+    
+    def get_queryset(self):
+        """
+        Return shares where the current user is either the sharer or the recipient
+        """
+        return NoteShare.objects.filter(
+            Q(shared_by=self.request.user) | Q(shared_with=self.request.user)
+        ).select_related('note', 'shared_by', 'shared_with')
+    
+    def perform_create(self, serializer):
+        """
+        Set the shared_by to the current user when creating a share
+        """
+        serializer.save(shared_by=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def shared_with_me(self, request):
+        """
+        Get notes that have been shared with the current user
+        """
+        shares = NoteShare.objects.filter(shared_with=request.user).select_related('note', 'shared_by')
+        
+        # Create a list of notes with sharing metadata
+        shared_notes = []
+        for share in shares:
+            note_data = SharedNoteSerializer(share.note, context={'request': request}).data
+            note_data.update({
+                'shared_by': UserSerializer(share.shared_by).data,
+                'share_id': share.id,
+                'permission': share.permission,
+                'share_message': share.message,
+                'shared_at': share.created_at
+            })
+            shared_notes.append(note_data)
+        
+        return Response(shared_notes)
+    
+    @action(detail=False, methods=['get'])
+    def shared_by_me(self, request):
+        """
+        Get notes that the current user has shared with others
+        """
+        shares = NoteShare.objects.filter(shared_by=request.user).select_related('note', 'shared_with')
+        serializer = self.get_serializer(shares, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def revoke(self, request, pk=None):
+        """
+        Revoke a share (only the original sharer can do this)
+        """
+        share = get_object_or_404(NoteShare, pk=pk, shared_by=request.user)
+        share.delete()
+        return Response({'message': 'Share revoked successfully'}, status=status.HTTP_200_OK)
+
+
+class SharedNoteAccessViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for tracking access to shared notes
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = SharedNoteAccessSerializer
+    
+    def get_queryset(self):
+        """
+        Return access logs for shares where the current user is involved
+        """
+        return SharedNoteAccess.objects.filter(
+            Q(share__shared_by=self.request.user) | Q(share__shared_with=self.request.user)
+        ).select_related('share', 'user', 'share__note')
+    
+    @action(detail=False, methods=['post'])
+    def log_access(self, request):
+        """
+        Log access to a shared note
+        """
+        share_id = request.data.get('share_id')
+        action_type = request.data.get('action', 'viewed')
+        
+        try:
+            share = NoteShare.objects.get(
+                id=share_id,
+                shared_with=request.user
+            )
+            
+            # Create access log
+            SharedNoteAccess.objects.create(
+                share=share,
+                user=request.user,
+                action=action_type
+            )
+            
+            return Response({'message': 'Access logged successfully'}, status=status.HTTP_201_CREATED)
+        except NoteShare.DoesNotExist:
+            return Response({'error': 'Share not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for searching users to share notes with
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSerializer
+    
+    def get_queryset(self):
+        """
+        Return users that can be searched for sharing
+        Exclude the current user
+        """
+        return User.objects.exclude(id=self.request.user.id)
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Search for users by email or username
+        """
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response({'error': 'Query parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        users = User.objects.filter(
+            Q(email__icontains=query) | Q(username__icontains=query) | 
+            Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        ).exclude(id=request.user.id)[:10]  # Limit to 10 results
+        
+        serializer = self.get_serializer(users, many=True)
         return Response(serializer.data)

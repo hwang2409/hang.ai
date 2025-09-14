@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from notes.models import Document, Folder, Tag, Image, Flashcard, FlashcardFolder
+from notes.models import Document, Folder, Tag, Image, Flashcard, FlashcardFolder, NoteShare, SharedNoteAccess
+from accounts.models import User
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -92,3 +93,61 @@ class FlashcardSerializer(serializers.ModelSerializer):
             instance.tags.set(tag_ids)
         
         return instance
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for user information in sharing contexts"""
+    full_name = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name']
+
+
+class NoteShareSerializer(serializers.ModelSerializer):
+    """Serializer for note sharing"""
+    shared_with = UserSerializer(read_only=True)
+    shared_with_id = serializers.IntegerField(write_only=True)
+    note = DocumentSerializer(read_only=True)
+    note_id = serializers.IntegerField(write_only=True)
+    
+    class Meta:
+        model = NoteShare
+        fields = [
+            'id', 'note', 'note_id', 'shared_by', 'shared_with', 'shared_with_id',
+            'permission', 'message', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'shared_by', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        # Set the shared_by to the current user
+        validated_data['shared_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class SharedNoteAccessSerializer(serializers.ModelSerializer):
+    """Serializer for tracking access to shared notes"""
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = SharedNoteAccess
+        fields = ['id', 'share', 'user', 'action', 'timestamp']
+        read_only_fields = ['id', 'timestamp']
+
+
+class SharedNoteSerializer(serializers.ModelSerializer):
+    """Serializer for notes that have been shared with the current user"""
+    tags = TagSerializer(many=True, read_only=True)
+    shared_by = UserSerializer(read_only=True)
+    share_id = serializers.IntegerField(read_only=True)
+    permission = serializers.CharField(read_only=True)
+    share_message = serializers.CharField(read_only=True)
+    shared_at = serializers.DateTimeField(read_only=True)
+    
+    class Meta:
+        model = Document
+        fields = [
+            'id', 'unique_id', 'title', 'content', 'tags', 'created_at', 'updated_at',
+            'shared_by', 'share_id', 'permission', 'share_message', 'shared_at'
+        ]
+        read_only_fields = ['id', 'unique_id', 'title', 'content', 'tags', 'created_at', 'updated_at']

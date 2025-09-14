@@ -178,3 +178,48 @@ class Flashcard(models.Model):
         """Get days until next review"""
         delta = self.next_review - timezone.now()
         return max(0, delta.days)
+
+
+class NoteShare(models.Model):
+    """
+    Model for sharing notes between users
+    """
+    PERMISSION_CHOICES = [
+        ('view', 'View Only'),
+        ('edit', 'View and Edit'),
+    ]
+    
+    note = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='shares')
+    shared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shared_notes')
+    shared_with = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_notes')
+    permission = models.CharField(max_length=10, choices=PERMISSION_CHOICES, default='view')
+    message = models.TextField(blank=True, null=True, help_text="Optional message when sharing")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['note', 'shared_with']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.note.title} shared with {self.shared_with.email}"
+
+
+class SharedNoteAccess(models.Model):
+    """
+    Model to track access to shared notes (for analytics and management)
+    """
+    share = models.ForeignKey(NoteShare, on_delete=models.CASCADE, related_name='access_logs')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='note_access_logs')
+    action = models.CharField(max_length=20, choices=[
+        ('viewed', 'Viewed'),
+        ('edited', 'Edited'),
+        ('commented', 'Commented'),
+    ])
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.user.email} {self.action} {self.share.note.title} at {self.timestamp}"
