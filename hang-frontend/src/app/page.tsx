@@ -878,7 +878,7 @@ export default function Home() {
             style={{ position: 'relative' }}
           >
             <div className="add-note-btn">
-              + new
+              + New
               <span style={{ marginLeft: '0.5rem' }}>▼</span>
             </div>
             {newDropdownOpen && (
