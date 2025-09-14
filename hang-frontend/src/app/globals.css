@@ -1989,11 +1989,13 @@ body {
 /* LaTeX/Math styling */
 .katex {
   font-size: 1.1em;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .katex-display {
   margin: 1.5rem 0;
   text-align: center;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 /* Responsive design */
@@ -3431,22 +3433,26 @@ body {
 
 .katex {
   font-size: 1em;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .katex-display {
   margin: 1rem 0;
   text-align: center;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 /* Ensure LaTeX content has proper spacing in flashcard displays */
 .note-content .katex-display {
   margin: 0.5rem 0;
   text-align: center;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .note-content .katex {
   font-size: 0.95em;
   vertical-align: baseline;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 /* Ensure LaTeX renders properly in flashcard previews */
@@ -3465,11 +3471,13 @@ body {
 .note-title .katex {
   font-size: 0.9em;
   vertical-align: baseline;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .note-title .katex-display {
   margin: 0.25rem 0;
   font-size: 0.85em;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 /* Ensure proper alignment of LaTeX with emoji in titles */
@@ -3483,9 +3491,11 @@ body {
 /* LaTeX styling in FlashcardList component */
 .flashcard-item .card-side .katex {
   font-size: 0.9em;
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .flashcard-item .card-side .katex-display {
   margin: 0.5rem 0;
   font-size: 0.85em;
+  font-family: "Times New Roman", Times, serif !important;
 }
