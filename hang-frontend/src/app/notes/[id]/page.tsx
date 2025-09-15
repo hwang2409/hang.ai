@@ -26,6 +26,11 @@ interface Note {
   tags: Tag[];
   created_at: string;
   updated_at: string;
+  user?: {
+    id: number;
+    username: string;
+    full_name: string;
+  };
 }
 
 // API functions
@@ -68,6 +73,32 @@ const updateNote = async (uniqueId: string, note: { title?: string; content?: st
     throw new Error(`Failed to update note: ${response.status} ${response.statusText}${text ? ` - ${text}` : ''}`);
   }
   return response.json();
+};
+
+const checkSharedNotePermission = async (noteId: string, token: string | null): Promise<{ canEdit: boolean; sharedBy?: string }> => {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/note-shares/shared_with_me/`, {
+      headers: getAuthHeaders(token),
+    });
+    if (!response.ok) {
+      return { canEdit: false };
+    }
+    
+    const sharedNotes = await response.json();
+    const sharedNote = sharedNotes.find((note: any) => note.unique_id === noteId);
+    
+    if (sharedNote) {
+      return {
+        canEdit: sharedNote.permission === 'edit',
+        sharedBy: sharedNote.shared_by?.full_name
+      };
+    }
+    
+    return { canEdit: false };
+  } catch (error) {
+    console.error('Error checking shared note permission:', error);
+    return { canEdit: false };
+  }
 };
 
 const fetchTags = async (token: string | null): Promise<Tag[]> => {
@@ -134,7 +165,7 @@ export default function NoteDetail() {
   const params = useParams();
   const router = useRouter();
   const noteUniqueId = params.id as string;
-  const { token, isAuthenticated, loading: authLoading } = useAuth();
+  const { token, isAuthenticated, loading: authLoading, user } = useAuth();
 
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,6 +174,11 @@ export default function NoteDetail() {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [isSharedNote, setIsSharedNote] = useState(false);
+  const [canEditSharedNote, setCanEditSharedNote] = useState(false);
+  const [sharedBy, setSharedBy] = useState<string | null>(null);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const isOwner = note?.user?.id === user?.id;
 
   // Extract image URLs from note content
   const extractImageUrls = (content: string): string[] => {
@@ -378,19 +414,28 @@ export default function NoteDetail() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [fetchedNote, fetchedTags] = await Promise.all([
+        const [fetchedNote, fetchedTags, sharedPermission] = await Promise.all([
           fetchNote(noteUniqueId, token),
-          fetchTags(token)
+          fetchTags(token),
+          checkSharedNotePermission(noteUniqueId, token)
         ]);
         setNote(fetchedNote);
         setEditForm({ title: fetchedNote.title, content: fetchedNote.content });
         setAllTags(fetchedTags);
+        
+        // Check if this is a shared note
+        const isShared = fetchedNote.user && fetchedNote.user.id !== user?.id;
+        setIsSharedNote(!!isShared);
+        setCanEditSharedNote(sharedPermission.canEdit);
+        setSharedBy(sharedPermission.sharedBy || null);
+        
         setError(null);
       } catch (err) {
         setError('Failed to load note. Please check if the note exists.');
         console.error('Error loading note:', err);
       } finally {
         setLoading(false);
+        setPermissionsLoaded(true);
       }
     };
 
@@ -400,6 +445,11 @@ export default function NoteDetail() {
   // Handle auto-save
   const handleAutoSave = async (content: string) => {
     if (!note || !token) return;
+    
+    // Only save if owner or has edit permission on a shared note
+    if (!(isOwner || canEditSharedNote)) {
+      return;
+    }
     
     try {
       const updatedNote = await updateNote(noteUniqueId, {
@@ -418,6 +468,12 @@ export default function NoteDetail() {
   // Save title when pressing Enter in the title input
   const handleTitleSave = async () => {
     if (!note || !token) return;
+    
+    // Only save if owner or has edit permission on a shared note
+    if (!(isOwner || canEditSharedNote)) {
+      return;
+    }
+    
     try {
       const updated = await updateNote(noteUniqueId, { title: editForm.title.trim() }, token);
       setNote(updated);
@@ -435,6 +491,13 @@ export default function NoteDetail() {
       router.push('/');
       return;
     }
+    
+    // Don't save if not owner and no edit permission
+    if (!(isOwner || canEditSharedNote)) {
+      router.push('/');
+      return;
+    }
+    
     try {
       const updated = await updateNote(noteUniqueId, {
         title: editForm.title.trim(),
@@ -452,6 +515,12 @@ export default function NoteDetail() {
   // Handle adding a tag to the note
   const handleAddTag = async (tagId: number) => {
     if (!note || !token) return;
+    
+    // Only modify tags if owner or has edit permission
+    if (!(isOwner || canEditSharedNote)) {
+      return;
+    }
+    
     try {
       const currentTagIds = note.tags.map(tag => tag.id);
       const updated = await updateNote(noteUniqueId, {
@@ -468,6 +537,12 @@ export default function NoteDetail() {
   // Handle removing a tag from the note
   const handleRemoveTag = async (tagId: number) => {
     if (!note || !token) return;
+    
+    // Only modify tags if owner or has edit permission
+    if (!(isOwner || canEditSharedNote)) {
+      return;
+    }
+    
     try {
       const currentTagIds = note.tags.map(tag => tag.id);
       const updated = await updateNote(noteUniqueId, {
@@ -484,6 +559,12 @@ export default function NoteDetail() {
   // Handle creating a new tag
   const handleCreateTag = async () => {
     if (!newTagName.trim() || !token) return;
+    
+    // Only create tags if owner or has edit permission
+    if (!(isOwner || canEditSharedNote)) {
+      return;
+    }
+    
     try {
       const newTag = await createTag(newTagName.trim(), '#3b82f6', token);
       setAllTags(prev => [...prev, newTag]);
@@ -500,6 +581,12 @@ export default function NoteDetail() {
   // Handle delete
   const handleDelete = async () => {
     if (!note || !token) return;
+    
+    // Only the owner can delete
+    if (!isOwner) {
+      setError('You cannot delete this note. Only the owner can delete it.');
+      return;
+    }
     
     if (window.confirm('Are you sure you want to delete this note?')) {
       try {
@@ -562,34 +649,56 @@ export default function NoteDetail() {
         
         <div className="note-actions">
           <ThemeToggle />
-          <button 
-            className="delete-btn"
-            onClick={handleDelete}
-          >
-            Delete
-          </button>
+          {!isSharedNote && (
+            <button 
+              className="delete-btn"
+              onClick={handleDelete}
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
       <div className="note-detail-content">
         <div className="edit-form">
-          <input
-            type="text"
-            value={editForm.title}
-            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-            onKeyDown={async (e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
+          {permissionsLoaded && (isOwner || canEditSharedNote) ? (
+            <input
+              type="text"
+              value={editForm.title}
+              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  await handleTitleSave();
+                }
+              }}
+              onBlur={async () => {
+                // Save title when clicking away from the input
                 await handleTitleSave();
-              }
-            }}
-            onBlur={async () => {
-              // Save title when clicking away from the input
-              await handleTitleSave();
-            }}
-            className="edit-title-input"
-            placeholder="Note title..."
-          />
+              }}
+              className="edit-title-input"
+              placeholder="Note title..."
+            />
+          ) : (
+            <div className="edit-title-input" style={{ cursor: 'default' }}>
+              {editForm.title || 'Untitled'}
+            </div>
+          )}
+          
+          {/* Shared Note Info */}
+          {isSharedNote && (
+            <div className="shared-note-info">
+              <div className="shared-note-badge">
+                {canEditSharedNote ? '✏️ Shared with Edit Access' : '👁️ Shared with View Access'}
+              </div>
+              {sharedBy && (
+                <div className="shared-by-info">
+                  Shared by: <strong>{sharedBy}</strong>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tags Section */}
           <div className="tags-section">
@@ -602,24 +711,28 @@ export default function NoteDetail() {
                   style={{ backgroundColor: tag.color }}
                 >
                   {tag.name}
-                  <button 
-                    className="tag-remove"
-                    onClick={() => handleRemoveTag(tag.id)}
-                  >
-                    ×
-                  </button>
+                  {!isSharedNote || canEditSharedNote ? (
+                    <button 
+                      className="tag-remove"
+                      onClick={() => handleRemoveTag(tag.id)}
+                    >
+                      ×
+                    </button>
+                  ) : null}
                 </span>
               ))}
-              <button 
-                className="add-tag-btn-small"
-                onClick={() => setShowTagInput(!showTagInput)}
-              >
-                +
-              </button>
+              {(!isSharedNote || canEditSharedNote) && (
+                <button 
+                  className="add-tag-btn-small"
+                  onClick={() => setShowTagInput(!showTagInput)}
+                >
+                  +
+                </button>
+              )}
             </div>
 
             {/* Add Tag Input */}
-            {showTagInput && (
+            {showTagInput && (!isSharedNote || canEditSharedNote) && (
               <div className="add-tag-form">
                 <input
                   type="text"
@@ -657,7 +770,7 @@ export default function NoteDetail() {
             )}
 
             {/* Available Tags */}
-            {allTags.filter(tag => !note.tags.some(noteTag => noteTag.id === tag.id)).length > 0 && (
+            {(!isSharedNote || canEditSharedNote) && allTags.filter(tag => !note.tags.some(noteTag => noteTag.id === tag.id)).length > 0 && (
               <div className="available-tags">
                 <div className="available-tags-header">
                   <span className="available-tags-label">Suggested tags:</span>
@@ -682,14 +795,20 @@ export default function NoteDetail() {
             )}
           </div>
 
-            <CMMarkdownEditor
-              value={editForm.content}
-              onChange={(content) => setEditForm({ ...editForm, content })}
-              onAutoSave={handleAutoSave}
-              className="cm-editor"
-              token={token}
-              placeholder="Write your note here..."
-            />
+            {permissionsLoaded && (isOwner || canEditSharedNote) ? (
+              <CMMarkdownEditor
+                value={editForm.content}
+                onChange={(content) => setEditForm({ ...editForm, content })}
+                onAutoSave={handleAutoSave}
+                className="cm-editor"
+                token={token}
+                placeholder="Write your note here..."
+              />
+            ) : (
+              <div className="read-only-content" style={{ cursor: 'default' }}>
+                <MarkdownRenderer content={note?.content || ''} />
+              </div>
+            )}
 
             {/* Attachments Section */}
             {imageUrls.length > 0 && (

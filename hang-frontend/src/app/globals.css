@@ -3686,7 +3686,7 @@ body {
 }
 
 .shared-note::before {
-  content: "📤";
+  content: "";
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
@@ -3695,13 +3695,114 @@ body {
 }
 
 .shared-note-info {
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(var(--accent-rgb), 0.05);
+  border: 1px solid rgba(var(--accent-rgb), 0.1);
+  border-radius: 0.5rem;
 }
 
 .shared-by {
   font-size: 0.75rem;
   color: var(--text-muted);
-  font-style: italic;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.shared-by::before {
+  content: "👤";
+  font-size: 0.875rem;
+}
+
+.permission-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(var(--text-muted-rgb), 0.1);
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  z-index: 5;
+  border: 1px solid rgba(var(--text-muted-rgb), 0.15);
+  transition: all 0.2s ease;
+  opacity: 0.8;
+}
+
+.permission-badge:hover {
+  opacity: 1;
+  background: rgba(var(--text-muted-rgb), 0.15);
+}
+
+/* Shared Note Info in Detail Page */
+.shared-note-info {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--card-bg), var(--card-hover));
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.shared-note-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.shared-note-badge:hover {
+  background: rgba(var(--accent-rgb), 0.15);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+.shared-by-info {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shared-by-info strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.read-only-content {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  min-height: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.read-only-content::before {
+  content: "👁️ Read Only";
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
 }
 
 /* Share Note Component Styles */
@@ -3955,14 +4056,6 @@ body {
   color: var(--accent);
 }
 
-.permission-badge {
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
 
 .shared-note-meta {
   display: flex;
@@ -4131,15 +4224,6 @@ body {
   margin-right: 1rem;
 }
 
-.permission-badge {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
 
 .shared-note-card .note-content {
   color: var(--text-muted);

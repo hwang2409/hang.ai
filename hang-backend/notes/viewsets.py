@@ -25,28 +25,70 @@ class DocumentViewSet(viewsets.ModelViewSet):
         Filter documents by the current user, excluding deleted ones
         """
         return Document.objects.filter(user=self.request.user, deleted=False)
-
+    
     def get_object(self):
         """
-        Override get_object to handle both unique_id and id lookups, filtered by user
+        Override get_object to handle both user's own notes and shared notes
         """
         lookup_value = self.kwargs.get(self.lookup_field)
         
-        # Try to find by unique_id first, filtered by user and not deleted
+        # First try to find the user's own note
         try:
             return get_object_or_404(Document, unique_id=lookup_value, user=self.request.user, deleted=False)
         except:
-            # Fallback to id lookup for backward compatibility
-            try:
-                return get_object_or_404(Document, id=lookup_value, user=self.request.user, deleted=False)
-            except:
-                raise Http404("Document not found")
+            pass
+        
+        # If not found, check if it's a shared note
+        try:
+            # Check if this note is shared with the current user
+            from notes.models import NoteShare
+            share = NoteShare.objects.get(
+                note__unique_id=lookup_value,
+                shared_with=self.request.user
+            )
+            return share.note
+        except NoteShare.DoesNotExist:
+            # If not shared either, return 404
+            from django.http import Http404
+            raise Http404("Note not found or you don't have permission to access it")
 
     def perform_create(self, serializer):
         """
         Set the user to the current user when creating a document
         """
         serializer.save(user=self.request.user)
+    
+    def perform_update(self, serializer):
+        """
+        Check permissions before updating a document
+        """
+        document = self.get_object()
+        
+        # If it's the user's own document, allow update
+        if document.user == self.request.user:
+            serializer.save()
+        else:
+            # Check if it's a shared document with edit permission
+            from notes.models import NoteShare
+            try:
+                share = NoteShare.objects.get(
+                    note=document,
+                    shared_with=self.request.user,
+                    permission='edit'
+                )
+                serializer.save()
+            except NoteShare.DoesNotExist:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("You don't have permission to edit this note")
+    
+    def perform_destroy(self, instance):
+        """
+        Only allow the owner to delete documents
+        """
+        if instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only delete your own notes")
+        instance.delete()
 
     def destroy(self, request, *args, **kwargs):
         """

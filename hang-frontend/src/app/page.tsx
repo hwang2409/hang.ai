@@ -1457,7 +1457,7 @@ export default function Home() {
                       handleShareNote(note);
                     }}
                   >
-                    📤 Share
+                    Share
                   </button>
                   <button 
                     className="note-action-btn"
@@ -1666,7 +1666,7 @@ export default function Home() {
                             handleShareNote(note);
                           }}
                         >
-                          📤 Share
+                          Share
                         </button>
                         <button 
                           className="note-action-btn"
@@ -1962,9 +1962,22 @@ export default function Home() {
           ) : (
             <div className="notes-grid">
               {sharedNotes.map((note) => (
-                <div key={`shared-${note.id}`} className="note-card shared-note">
+                <div 
+                  key={`shared-${note.id}`} 
+                  className="note-card shared-note"
+                  onClick={() => {
+                    // Navigate to the note detail page
+                    window.location.href = `/notes/${note.unique_id}`;
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="note-card-media note-card-media-blank" aria-hidden="true" />
                   <h2 className="note-title">{note.title}</h2>
+                  
+                  {/* Permission Badge */}
+                  <div className="permission-badge">
+                    {(note as any).permission === 'edit' ? 'Edit' : 'View'}
+                  </div>
                   
                   {/* Tags */}
                   {note.tags && note.tags.length > 0 && (
