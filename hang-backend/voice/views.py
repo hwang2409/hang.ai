@@ -538,6 +538,35 @@ class VoiceTestView(APIView):
             else:
                 result['imports']['interpreter'] = 'failed: not cached'
             
+            # Add simple file check to existing response
+            try:
+                # Check if steve.py exists and get its size
+                steve_path = '/app/textalk/steve.py'
+                interpreter_path = '/app/textalk/interpreter.py'
+                
+                result['file_check'] = {
+                    'steve_exists': os.path.exists(steve_path),
+                    'steve_size': os.path.getsize(steve_path) if os.path.exists(steve_path) else 0,
+                    'interpreter_exists': os.path.exists(interpreter_path),
+                    'interpreter_size': os.path.getsize(interpreter_path) if os.path.exists(interpreter_path) else 0,
+                    'steve_path': steve_path,
+                    'interpreter_path': interpreter_path
+                }
+                
+                # Try to list directory contents
+                try:
+                    result['file_check']['app_contents'] = os.listdir('/app')
+                except:
+                    result['file_check']['app_contents'] = 'Cannot list /app'
+                
+                try:
+                    result['file_check']['textalk_contents'] = os.listdir('/app/textalk')
+                except:
+                    result['file_check']['textalk_contents'] = 'Cannot list /app/textalk'
+                    
+            except Exception as e:
+                result['file_check'] = {'error': str(e)}
+            
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:
