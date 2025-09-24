@@ -73,8 +73,19 @@ def get_voice_components():
         
         # Import and initialize components (only once)
         if _voice_components_cache['steve'] is None:
-            logger.info("Initializing Steve (Whisper) - this may take a moment...")
+            logger.info("Initializing Steve (Whisper) - checking dependencies...")
             try:
+                # First check if required dependencies are available
+                try:
+                    import torch
+                    import transformers
+                    import librosa
+                    import soundfile
+                    logger.info("✅ All voice dependencies available")
+                except ImportError as dep_error:
+                    logger.warning(f"⚠️ Missing voice dependencies: {dep_error}")
+                    raise ImportError(f"Missing required dependencies: {dep_error}")
+                
                 # Try multiple import strategies
                 steve_class = None
                 for import_strategy in [
@@ -93,7 +104,7 @@ def get_voice_components():
                 _voice_components_cache['steve'] = steve_class()
                 logger.info("✅ Steve (Whisper) initialized and cached")
             except Exception as e:
-                logger.error(f"Failed to import Steve: {e}")
+                logger.error(f"Failed to initialize Steve: {e}")
                 raise e
         
         if _voice_components_cache['fst'] is None:
@@ -117,7 +128,7 @@ def get_voice_components():
                 _voice_components_cache['fst'] = fst_class()
                 logger.info("✅ MathFST initialized and cached")
             except Exception as e:
-                logger.error(f"Failed to import MathFST: {e}")
+                logger.error(f"Failed to initialize MathFST: {e}")
                 raise e
         
         _voice_components_cache['initialized'] = True
