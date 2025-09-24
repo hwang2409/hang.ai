@@ -440,13 +440,28 @@ class VoiceTestView(APIView):
             backend_dir = os.path.dirname(os.path.dirname(__file__))
             textalk_path = os.path.join(backend_dir, 'textalk')
             
+            # Check if steve.py exists specifically
+            steve_file_path = os.path.join(textalk_path, 'steve.py') if textalk_path else None
+            interpreter_file_path = os.path.join(textalk_path, 'interpreter.py') if textalk_path else None
+            
             result = {
                 'debug_info': {
                     'backend_dir': backend_dir,
                     'textalk_path': textalk_path,
-                    'textalk_exists': os.path.exists(textalk_path),
+                    'textalk_exists': os.path.exists(textalk_path) if textalk_path else False,
+                    'steve_file_exists': os.path.exists(steve_file_path) if steve_file_path else False,
+                    'interpreter_file_exists': os.path.exists(interpreter_file_path) if interpreter_file_path else False,
+                    'steve_file_path': steve_file_path,
+                    'interpreter_file_path': interpreter_file_path,
                     'current_dir': os.getcwd(),
-                    'python_path': sys.path[:5]  # First 5 paths
+                    'python_path': sys.path[:5],  # First 5 paths
+                    'all_paths_tried': [
+                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'textalk'),
+                        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'textalk'),
+                        os.path.join(os.getcwd(), 'textalk'),
+                        '/app/textalk',
+                        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'textalk')
+                    ]
                 },
                 'imports': {},
                 'test_results': {},
@@ -498,6 +513,49 @@ class VoiceTestView(APIView):
             logger.error(f"Voice test error: {str(e)}")
             return Response({
                 'error': 'Voice test failed',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class VoiceFileCheckView(APIView):
+    """
+    Simple endpoint to check if voice files exist in production
+    """
+    permission_classes = []  # No auth required
+    
+    def get(self, request):
+        """
+        Check if voice component files exist
+        """
+        try:
+            # Check multiple possible locations
+            possible_locations = [
+                '/app/textalk/steve.py',
+                '/app/textalk/interpreter.py',
+                os.path.join(os.getcwd(), 'textalk', 'steve.py'),
+                os.path.join(os.getcwd(), 'textalk', 'interpreter.py'),
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), 'textalk', 'steve.py'),
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), 'textalk', 'interpreter.py'),
+            ]
+            
+            results = {}
+            for location in possible_locations:
+                results[location] = {
+                    'exists': os.path.exists(location),
+                    'is_file': os.path.isfile(location) if os.path.exists(location) else False,
+                    'size': os.path.getsize(location) if os.path.exists(location) else 0
+                }
+            
+            return Response({
+                'file_check': results,
+                'current_dir': os.getcwd(),
+                'app_dir_contents': os.listdir('/app') if os.path.exists('/app') else 'Not found',
+                'textalk_dir_contents': os.listdir('/app/textalk') if os.path.exists('/app/textalk') else 'Not found'
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': 'File check failed',
                 'details': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
