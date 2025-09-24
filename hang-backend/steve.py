@@ -2,7 +2,6 @@ import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, WhisperTokenizer, WhisperFeatureExtractor, pipeline
 import librosa
 import soundfile
-from datasets import load_dataset
 
 class Steve:
     def __init__(self):
