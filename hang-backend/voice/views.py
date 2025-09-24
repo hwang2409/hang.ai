@@ -444,15 +444,23 @@ class VoiceTestView(APIView):
             steve_file_path = os.path.join(textalk_path, 'steve.py') if textalk_path else None
             interpreter_file_path = os.path.join(textalk_path, 'interpreter.py') if textalk_path else None
             
+            # Check if files actually exist and get their sizes
+            steve_exists = os.path.exists(steve_file_path) if steve_file_path else False
+            interpreter_exists = os.path.exists(interpreter_file_path) if interpreter_file_path else False
+            steve_size = os.path.getsize(steve_file_path) if steve_exists else 0
+            interpreter_size = os.path.getsize(interpreter_file_path) if interpreter_exists else 0
+            
             result = {
                 'debug_info': {
                     'backend_dir': backend_dir,
                     'textalk_path': textalk_path,
                     'textalk_exists': os.path.exists(textalk_path) if textalk_path else False,
-                    'steve_file_exists': os.path.exists(steve_file_path) if steve_file_path else False,
-                    'interpreter_file_exists': os.path.exists(interpreter_file_path) if interpreter_file_path else False,
+                    'steve_file_exists': steve_exists,
+                    'interpreter_file_exists': interpreter_exists,
                     'steve_file_path': steve_file_path,
                     'interpreter_file_path': interpreter_file_path,
+                    'steve_file_size': steve_size,
+                    'interpreter_file_size': interpreter_size,
                     'current_dir': os.getcwd(),
                     'python_path': sys.path[:5],  # First 5 paths
                     'all_paths_tried': [
@@ -468,6 +476,29 @@ class VoiceTestView(APIView):
                 'cached': _voice_components_cache['initialized'],
                 'cache_error': _voice_components_cache.get('error')
             }
+            
+            # Test direct imports to see what's failing
+            try:
+                # Try to import steve directly
+                import steve
+                result['direct_imports'] = {
+                    'steve_module': 'success',
+                    'steve_class_exists': hasattr(steve, 'Steve')
+                }
+            except Exception as e:
+                result['direct_imports'] = {
+                    'steve_module': f'failed: {str(e)}',
+                    'steve_class_exists': False
+                }
+            
+            try:
+                # Try to import interpreter directly
+                import interpreter
+                result['direct_imports']['interpreter_module'] = 'success'
+                result['direct_imports']['interpreter_class_exists'] = hasattr(interpreter, 'MathFST')
+            except Exception as e:
+                result['direct_imports']['interpreter_module'] = f'failed: {str(e)}'
+                result['direct_imports']['interpreter_class_exists'] = False
             
             # Test cached components
             steve, fst = get_voice_components()
