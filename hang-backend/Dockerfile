@@ -35,12 +35,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . /app/
 
-# Create textalk directory and copy voice files from main directory
-RUN mkdir -p /app/textalk
-COPY steve.py /app/textalk/steve.py
-COPY interpreter.py /app/textalk/interpreter.py
-COPY config.py /app/textalk/config.py
-COPY voice_translator.py /app/textalk/voice_translator.py
+# Copy textalk directory (now a regular directory, not a submodule)
+COPY textalk/ /app/textalk/
 
 # Verify files were copied and show what's in the directories
 RUN echo "=== Verifying textalk files ===" && \
