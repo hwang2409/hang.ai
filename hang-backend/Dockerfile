@@ -35,6 +35,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . /app/
 
+# Explicitly ensure textalk directory is copied with verification
+COPY textalk/ /app/textalk/
+
+# Verify files were copied and show what's in the directories
+RUN echo "=== Verifying textalk files ===" && \
+    ls -la /app/ && \
+    echo "=== Contents of /app/textalk/ ===" && \
+    ls -la /app/textalk/ && \
+    echo "=== Checking steve.py exists ===" && \
+    ls -la /app/textalk/steve.py && \
+    echo "=== First few lines of steve.py ===" && \
+    head -5 /app/textalk/steve.py
+
 # Create directories for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 
