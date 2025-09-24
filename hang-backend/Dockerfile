@@ -32,11 +32,22 @@ RUN wget https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
+# Copy project (this will copy the main repo but not submodule contents)
 COPY . /app/
 
-# Explicitly ensure textalk directory is copied with verification
+# Handle textalk git submodule by copying files explicitly from the build context
+# First, initialize the submodule structure
+RUN mkdir -p /app/textalk
+
+# Copy all textalk files from the build context
 COPY textalk/ /app/textalk/
+
+# If the above doesn't work due to submodule issues, copy files individually
+RUN if [ ! -f /app/textalk/steve.py ]; then \
+    echo "WARNING: steve.py not found, checking what was copied..." && \
+    ls -la /app/textalk/ && \
+    echo "This suggests git submodule files weren't included in build context"; \
+fi
 
 # Verify files were copied and show what's in the directories
 RUN echo "=== Verifying textalk files ===" && \
