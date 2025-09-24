@@ -38,55 +38,85 @@ def get_voice_components():
         return _voice_components_cache['steve'], _voice_components_cache['fst']
     
     try:
-        # Add textalk directory to Python path
-        backend_dir = os.path.dirname(os.path.dirname(__file__))
-        textalk_path = os.path.join(backend_dir, 'textalk')
+        # Multiple strategies to find textalk directory
+        possible_paths = [
+            # Strategy 1: Relative to voice app
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'textalk'),
+            # Strategy 2: From Django project root
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'textalk'),
+            # Strategy 3: From current working directory
+            os.path.join(os.getcwd(), 'textalk'),
+            # Strategy 4: Absolute path from app directory
+            '/app/textalk',
+            # Strategy 5: From manage.py location
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'textalk')
+        ]
         
-        logger.info(f"Looking for textalk directory at: {textalk_path}")
-        logger.info(f"Current working directory: {os.getcwd()}")
-        logger.info(f"Backend directory: {backend_dir}")
+        textalk_path = None
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isdir(path):
+                textalk_path = path
+                logger.info(f"Found textalk directory at: {textalk_path}")
+                break
         
-        if not os.path.exists(textalk_path):
-            error_msg = f'Voice processing directory not found: {textalk_path}'
+        if not textalk_path:
+            error_msg = f'Voice processing directory not found. Tried: {possible_paths}'
             logger.error(error_msg)
             _voice_components_cache['error'] = error_msg
             _voice_components_cache['initialized'] = True
             return None, None
         
+        # Add to Python path if not already there
         if textalk_path not in sys.path:
-            sys.path.append(textalk_path)
+            sys.path.insert(0, textalk_path)  # Insert at beginning for priority
             logger.info(f"Added {textalk_path} to Python path")
         
         # Import and initialize components (only once)
         if _voice_components_cache['steve'] is None:
             logger.info("Initializing Steve (Whisper) - this may take a moment...")
             try:
-                # Try multiple import strategies for production
-                try:
-                    from steve import Steve
-                except ImportError:
-                    # Try absolute import
-                    from textalk.steve import Steve
+                # Try multiple import strategies
+                steve_class = None
+                for import_strategy in [
+                    lambda: __import__('steve', fromlist=['Steve']).Steve,
+                    lambda: __import__('textalk.steve', fromlist=['Steve']).Steve,
+                ]:
+                    try:
+                        steve_class = import_strategy()
+                        break
+                    except ImportError:
+                        continue
                 
-                _voice_components_cache['steve'] = Steve()
+                if steve_class is None:
+                    raise ImportError("Could not import Steve from any location")
+                
+                _voice_components_cache['steve'] = steve_class()
                 logger.info("✅ Steve (Whisper) initialized and cached")
-            except ImportError as e:
+            except Exception as e:
                 logger.error(f"Failed to import Steve: {e}")
                 raise e
         
         if _voice_components_cache['fst'] is None:
             logger.info("Initializing MathFST...")
             try:
-                # Try multiple import strategies for production
-                try:
-                    from interpreter import MathFST
-                except ImportError:
-                    # Try absolute import
-                    from textalk.interpreter import MathFST
+                # Try multiple import strategies
+                fst_class = None
+                for import_strategy in [
+                    lambda: __import__('interpreter', fromlist=['MathFST']).MathFST,
+                    lambda: __import__('textalk.interpreter', fromlist=['MathFST']).MathFST,
+                ]:
+                    try:
+                        fst_class = import_strategy()
+                        break
+                    except ImportError:
+                        continue
                 
-                _voice_components_cache['fst'] = MathFST()
+                if fst_class is None:
+                    raise ImportError("Could not import MathFST from any location")
+                
+                _voice_components_cache['fst'] = fst_class()
                 logger.info("✅ MathFST initialized and cached")
-            except ImportError as e:
+            except Exception as e:
                 logger.error(f"Failed to import MathFST: {e}")
                 raise e
         
@@ -399,7 +429,7 @@ class VoiceTestView(APIView):
     """
     API endpoint to test voice components availability
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # Remove authentication requirement for debugging
     
     def get(self, request):
         """
