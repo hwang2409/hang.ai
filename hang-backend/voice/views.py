@@ -42,6 +42,10 @@ def get_voice_components():
         backend_dir = os.path.dirname(os.path.dirname(__file__))
         textalk_path = os.path.join(backend_dir, 'textalk')
         
+        logger.info(f"Looking for textalk directory at: {textalk_path}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Backend directory: {backend_dir}")
+        
         if not os.path.exists(textalk_path):
             error_msg = f'Voice processing directory not found: {textalk_path}'
             logger.error(error_msg)
@@ -56,15 +60,35 @@ def get_voice_components():
         # Import and initialize components (only once)
         if _voice_components_cache['steve'] is None:
             logger.info("Initializing Steve (Whisper) - this may take a moment...")
-            from steve import Steve
-            _voice_components_cache['steve'] = Steve()
-            logger.info("✅ Steve (Whisper) initialized and cached")
+            try:
+                # Try multiple import strategies for production
+                try:
+                    from steve import Steve
+                except ImportError:
+                    # Try absolute import
+                    from textalk.steve import Steve
+                
+                _voice_components_cache['steve'] = Steve()
+                logger.info("✅ Steve (Whisper) initialized and cached")
+            except ImportError as e:
+                logger.error(f"Failed to import Steve: {e}")
+                raise e
         
         if _voice_components_cache['fst'] is None:
             logger.info("Initializing MathFST...")
-            from interpreter import MathFST
-            _voice_components_cache['fst'] = MathFST()
-            logger.info("✅ MathFST initialized and cached")
+            try:
+                # Try multiple import strategies for production
+                try:
+                    from interpreter import MathFST
+                except ImportError:
+                    # Try absolute import
+                    from textalk.interpreter import MathFST
+                
+                _voice_components_cache['fst'] = MathFST()
+                logger.info("✅ MathFST initialized and cached")
+            except ImportError as e:
+                logger.error(f"Failed to import MathFST: {e}")
+                raise e
         
         _voice_components_cache['initialized'] = True
         _voice_components_cache['error'] = None
@@ -382,15 +406,26 @@ class VoiceTestView(APIView):
         Test voice components and return status (uses cached components)
         """
         try:
-            # Test cached components
-            steve, fst = get_voice_components()
+            # Add debug information
+            backend_dir = os.path.dirname(os.path.dirname(__file__))
+            textalk_path = os.path.join(backend_dir, 'textalk')
             
             result = {
+                'debug_info': {
+                    'backend_dir': backend_dir,
+                    'textalk_path': textalk_path,
+                    'textalk_exists': os.path.exists(textalk_path),
+                    'current_dir': os.getcwd(),
+                    'python_path': sys.path[:5]  # First 5 paths
+                },
                 'imports': {},
                 'test_results': {},
                 'cached': _voice_components_cache['initialized'],
                 'cache_error': _voice_components_cache.get('error')
             }
+            
+            # Test cached components
+            steve, fst = get_voice_components()
             
             # Test Steve (Whisper)
             if steve is not None:
