@@ -440,39 +440,6 @@ export default function VoicePage() {
     });
   };
 
-  const testBackend = async () => {
-    try {
-      setBackendStatus('Testing backend...');
-      
-      const response = await fetch(`${getApiBaseUrl()}/voice/test/`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Token ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Authentication failed - please make sure you are logged in');
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('Backend test result:', result);
-      
-      if (result.imports?.steve === 'success' && result.imports?.interpreter === 'success') {
-        const cacheStatus = result.cached ? 'cached and ready' : 'initializing...';
-        setBackendStatus(`✅ Backend components ${cacheStatus}`);
-      } else {
-        setBackendStatus(`❌ Backend issues: ${JSON.stringify(result.imports)}`);
-      }
-      
-    } catch (err) {
-      console.error('Backend test error:', err);
-      setBackendStatus(`❌ Backend connection failed: ${err}`);
-    }
-  };
 
   if (!isAuthenticated) {
     return (
@@ -548,12 +515,6 @@ export default function VoicePage() {
                 </button>
               )}
               
-              <button 
-                className="clear-btn"
-                onClick={testBackend}
-              >
-                🧪 Test Backend
-              </button>
             </div>
 
             {currentTranscription && (

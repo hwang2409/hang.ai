@@ -25,7 +25,9 @@ _voice_components_cache = {
     'steve': None,
     'fst': None,
     'initialized': False,
-    'error': None
+    'error': None,
+    'worker_id': None,
+    'init_time': None
 }
 
 def get_voice_components():
@@ -34,8 +36,15 @@ def get_voice_components():
     """
     global _voice_components_cache
     
+    # Add worker process tracking
+    import os
+    worker_id = os.getpid()
+    
     if _voice_components_cache['initialized'] and _voice_components_cache['error'] is None:
+        logger.info(f"✅ Using cached voice components (worker {worker_id})")
         return _voice_components_cache['steve'], _voice_components_cache['fst']
+    
+    logger.info(f"🔄 Initializing voice components for worker {worker_id}...")
     
     try:
         # Multiple strategies to find textalk directory
@@ -133,7 +142,10 @@ def get_voice_components():
         
         _voice_components_cache['initialized'] = True
         _voice_components_cache['error'] = None
+        _voice_components_cache['worker_id'] = worker_id
+        _voice_components_cache['init_time'] = time.time()
         
+        logger.info(f"✅ Voice components initialized successfully for worker {worker_id}")
         return _voice_components_cache['steve'], _voice_components_cache['fst']
         
     except Exception as e:

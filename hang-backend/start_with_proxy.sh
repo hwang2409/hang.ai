@@ -117,8 +117,12 @@ cleanup() {
 # Set trap to cleanup on exit
 trap cleanup EXIT
 
+# Enable voice components preloading
+export PRELOAD_VOICE_COMPONENTS=true
+echo "PRELOAD_VOICE_COMPONENTS: ${PRELOAD_VOICE_COMPONENTS}"
+
 # Start the application
 echo "=========================================="
 echo "Starting application on port $PORT..."
 echo "=========================================="
-exec gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --workers 2
+exec gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --preload
