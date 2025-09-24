@@ -25,6 +25,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/auth/', include('accounts.urls')),
+    path('api/voice/', include('voice.urls')),
     path('api/upload/', UploadImageView.as_view(), name='upload-image'),
     path('api/images/<uuid:image_id>/', ServeImageView.as_view(), name='serve-image'),
     path('health/', health_check, name='health-check'),

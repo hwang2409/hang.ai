@@ -988,6 +988,9 @@ export default function Home() {
         >
           📤 Shared Notes
         </button>
+        <Link href="/voice" className="tab-btn">
+          🎤 Voice
+        </Link>
       </div>
 
       {activeFolder !== null && (

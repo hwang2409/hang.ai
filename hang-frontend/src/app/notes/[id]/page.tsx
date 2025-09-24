@@ -7,6 +7,7 @@ import MarkdownRenderer from '../../../components/MarkdownRenderer';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getAuthHeaders } from '../../../contexts/AuthContext';
 import ThemeToggle from '../../../components/ThemeToggle';
+import ShareNote from '../../../components/ShareNote';
 import ContentEditableEditor from '../../../components/ContentEditableEditor';
 import CMMarkdownEditor from '../../../components/CMMarkdownEditor';
 import jsPDF from 'jspdf';
@@ -178,7 +179,8 @@ export default function NoteDetail() {
   const [canEditSharedNote, setCanEditSharedNote] = useState(false);
   const [sharedBy, setSharedBy] = useState<string | null>(null);
   const [permissionsLoaded, setPermissionsLoaded] = useState(false);
-  const isOwner = note?.user?.id === user?.id;
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const isOwner = note?.user?.id ? note.user.id === user?.id : true;
 
   // Extract image URLs from note content
   const extractImageUrls = (content: string): string[] => {
@@ -649,6 +651,15 @@ export default function NoteDetail() {
         
         <div className="note-actions">
           <ThemeToggle />
+          {isOwner && (
+            <button 
+              className="share-btn"
+              onClick={() => setIsShareOpen(true)}
+              title="Share this note"
+            >
+              📤 Share
+            </button>
+          )}
           {!isSharedNote && (
             <button 
               className="delete-btn"
@@ -854,6 +865,14 @@ export default function NoteDetail() {
             )}
         </div>
       </div>
+      {isOwner && isShareOpen && note && (
+        <ShareNote 
+          noteId={note.id}
+          noteTitle={note.title}
+          onClose={() => setIsShareOpen(false)}
+          onShare={() => setIsShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
