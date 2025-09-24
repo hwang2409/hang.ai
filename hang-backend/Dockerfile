@@ -17,6 +17,11 @@ RUN apt-get update \
         libpq-dev \
         wget \
         ca-certificates \
+        # Audio processing dependencies
+        portaudio19-dev \
+        libasound2-dev \
+        libsndfile1-dev \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Cloud SQL Auth Proxy v2
