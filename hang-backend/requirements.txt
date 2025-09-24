@@ -15,6 +15,7 @@ typing-extensions>=4.0.0
 # Core ML packages - using specific versions for stability
 torch==2.0.1
 transformers==4.30.0
+accelerate>=0.20.0
 librosa==0.10.0
 soundfile==0.12.1
 
