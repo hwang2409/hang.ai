@@ -67,6 +67,10 @@ class TokenType(enum.Enum):
     DETERMINANT = "determinant"
     TRANSPOSE = "transpose"
     INVERSE = "inverse"
+    DOT_PRODUCT = "dot_product"
+    CROSS_PRODUCT = "cross_product"
+    MAGNITUDE = "magnitude"
+    NORM = "norm"
     
     # Set theory
     SET = "set"
@@ -81,6 +85,9 @@ class TokenType(enum.Enum):
     NOT = "not"
     IMPLIES = "implies"
     IFF = "iff"
+    THEREFORE = "therefore"
+    BECAUSE = "because"
+    QED = "qed"
     
     # Comparisons
     LESS_THAN = "less_than"
@@ -121,6 +128,15 @@ class TokenType(enum.Enum):
     FOR_ALL = "for_all"
     EXISTS = "exists"
     AS = "as"
+    IS_POSITIVE = "is_positive"
+    IS_NEGATIVE = "is_negative"
+    IS_ZERO = "is_zero"
+    IS_NONZERO = "is_nonzero"
+    IS_EVEN = "is_even"
+    IS_ODD = "is_odd"
+    IS_PRIME = "is_prime"
+    IS_REAL = "is_real"
+    IS_INTEGER = "is_integer"
     
     UNKNOWN = "unknown"
 
@@ -257,6 +273,22 @@ class MathTokenizer:
                 r'\b(?:inverse|inverted)\b'
             ],
             
+            TokenType.DOT_PRODUCT: [
+                r'\b(?:dot product|scalar product|inner product|·)\b'
+            ],
+            
+            TokenType.CROSS_PRODUCT: [
+                r'\b(?:cross product|vector product|×)\b'
+            ],
+            
+            TokenType.MAGNITUDE: [
+                r'\b(?:magnitude|length|modulus)\b'
+            ],
+            
+            TokenType.NORM: [
+                r'\b(?:norm|euclidean norm|2-norm)\b'
+            ],
+            
             # Set theory
             TokenType.SET: [
                 r'\b(?:set|subset|superset)\b'
@@ -295,6 +327,19 @@ class MathTokenizer:
                 r'\b(?:if and only if|iff|↔)\b'
             ],
             
+            TokenType.THEREFORE: [
+                r'\b(?:therefore|thus|hence|consequently|∴)\b'
+            ],
+            
+            TokenType.BECAUSE: [
+                r'\b(?:because|since|given that|∵)\b',
+                r'\bas\b(?=\s+(?:of|that|this|it|we|they|you|I|he|she|we|it))'  # "as" only when followed by specific words
+            ],
+            
+            TokenType.QED: [
+                r'\b(?:qed|Q\.E\.D\.|quod erat demonstrandum|proved|proof complete)\b'
+            ],
+            
             # Comparisons
             TokenType.LESS_THAN: [
                 r'\b(?:less than|<)\b'
@@ -317,7 +362,8 @@ class MathTokenizer:
             ],
             
             TokenType.APPROXIMATELY: [
-                r'\b(?:approximately|≈|~)\b'
+                r'\b(?:approximately|≈|~)\b',
+                r'\b(?:approximately equal|approximately equal to)\b'
             ],
             
             # Geometry
@@ -343,7 +389,8 @@ class MathTokenizer:
             
             # Statistics
             TokenType.PROBABILITY: [
-                r'\b(?:probability|P)\b'
+                r'\b(?:probability)\b',
+                r'\bP(?=\()\b'  # Match P only when followed by opening parenthesis
             ],
             
             TokenType.EXPECTED_VALUE: [
@@ -392,6 +439,17 @@ class MathTokenizer:
             
             # Special limit words
             TokenType.AS: [r'\b(?:as)\b'],
+            
+            # Natural language mathematical properties
+            TokenType.IS_POSITIVE: [r'\b(?:is positive|is greater than zero)\b'],
+            TokenType.IS_NEGATIVE: [r'\b(?:is negative|is less than zero)\b'],
+            TokenType.IS_ZERO: [r'\b(?:is zero|equals zero)\b'],
+            TokenType.IS_NONZERO: [r'\b(?:is nonzero|is non-zero|is not zero)\b'],
+            TokenType.IS_EVEN: [r'\b(?:is even)\b'],
+            TokenType.IS_ODD: [r'\b(?:is odd)\b'],
+            TokenType.IS_PRIME: [r'\b(?:is prime)\b'],
+            TokenType.IS_REAL: [r'\b(?:is real|is a real number)\b'],
+            TokenType.IS_INTEGER: [r'\b(?:is an integer|is integer)\b'],
             
             # Variables and numbers
             TokenType.VARIABLE: [
@@ -446,9 +504,7 @@ class MathTokenizer:
             # Special handling for "exponential of negative"
             elif (i + 2 < len(words) and 
                   words[i] == 'exponential' and words[i+1] == 'of' and words[i+2] == 'negative'):
-                tokens.append(Token(TokenType.EXPONENTIAL, r'\exp', 'exponential of', position))
-                tokens.append(Token(TokenType.BRACKET, '(', '(', position))
-                tokens.append(Token(TokenType.OPERATOR, '-', 'negative', position))
+                tokens.append(Token(TokenType.EXPONENTIAL, r'\exp(-', 'exponential of negative', position))
                 i += 3
                 matched = True
             else:
@@ -458,7 +514,14 @@ class MathTokenizer:
                         phrase = ' '.join(words[i:i+length])
                         token_type = self._match_phrase(phrase)
                         if token_type != TokenType.UNKNOWN:
-                            tokens.append(Token(token_type, self._convert_to_latex_value(token_type, phrase), phrase, position))
+                            # Special handling for properties to include the variable
+                            if token_type in [TokenType.IS_POSITIVE, TokenType.IS_NEGATIVE, TokenType.IS_ZERO, 
+                                            TokenType.IS_NONZERO, TokenType.IS_EVEN, TokenType.IS_ODD,
+                                            TokenType.IS_PRIME, TokenType.IS_REAL, TokenType.IS_INTEGER]:
+                                # Don't include variable in the token value, handle separately
+                                tokens.append(Token(token_type, self._convert_to_latex_value(token_type, phrase), phrase, position))
+                            else:
+                                tokens.append(Token(token_type, self._convert_to_latex_value(token_type, phrase), phrase, position))
                             i += length
                             matched = True
                             break
@@ -553,6 +616,7 @@ class MathTokenizer:
             'greater than or equal': r'\geq', '≥': r'\geq', '>=': r'\geq',
             'not equal': r'\neq', '≠': r'\neq', '!=': r'\neq',
             'approximately': r'\approx', '≈': r'\approx', '~': r'\approx',
+            'approximately equal': r'\approx', 'approximately equal to': r'\approx',
             
             # Set theory
             'union': r'\cup', '∪': r'\cup',
@@ -568,6 +632,21 @@ class MathTokenizer:
             'if and only if': r'\leftrightarrow', 'iff': r'\leftrightarrow', '↔': r'\leftrightarrow',
             'for all': r'\forall', '∀': r'\forall',
             'there exists': r'\exists', '∃': r'\exists',
+            'therefore': r'\therefore', 'thus': r'\therefore', 'hence': r'\therefore', 
+            'consequently': r'\therefore', '∴': r'\therefore',
+            'because': r'\because', 'since': r'\because', 'given that': r'\because', '∵': r'\because',
+            'qed': r'\blacksquare', 'Q.E.D.': r'\blacksquare', 'quod erat demonstrandum': r'\blacksquare',
+            'proved': r'\blacksquare', 'proof complete': r'\blacksquare',
+            
+            # Natural language mathematical properties
+            'is positive': ' > 0', 'is greater than zero': ' > 0',
+            'is negative': ' < 0', 'is less than zero': ' < 0',
+            'is zero': ' = 0', 'equals zero': ' = 0',
+            'is nonzero': r' \neq 0', 'is non-zero': r' \neq 0', 'is not zero': r' \neq 0',
+            'is even': r' \in 2\mathbb{Z}', 'is odd': r' \in 2\mathbb{Z} + 1',
+            'is prime': r' \in \mathbb{P}', 'is real': r' \in \mathbb{R}',
+            'is an integer': r' \in \mathbb{Z}', 'is integer': r' \in \mathbb{Z}',
+            'is a real number': r' \in \mathbb{R}',
             
             # Geometry
             'angle': r'\angle', '∠': r'\angle',
@@ -580,6 +659,10 @@ class MathTokenizer:
             'matrix': r'\begin{matrix}', 'vector': r'\vec',
             'determinant': r'\det', 'det': r'\det',
             'transpose': r'^T', 'inverse': r'^{-1}',
+            'dot product': r'\cdot', 'scalar product': r'\cdot', 'inner product': r'\langle \cdot, \cdot \rangle',
+            'cross product': r'\times', 'vector product': r'\times',
+            'magnitude': r'\|\cdot\|', 'length': r'\|\cdot\|', 'modulus': r'\|\cdot\|',
+            'norm': r'\|\cdot\|', 'euclidean norm': r'\|\cdot\|_2', '2-norm': r'\|\cdot\|_2',
             
             # Statistics
             'probability': 'P', 'expected value': 'E', 'expectation': 'E',
@@ -627,6 +710,7 @@ class MathFST:
         self.output_stack = []
         self.context_stack = []
         self.current_bounds = {}
+        self.limit_pending = False
         
     def compile(self, text: str) -> str:
         """Main compilation function"""
@@ -692,7 +776,8 @@ class MathFST:
             self._handle_comparison(token)
         
         # Logic
-        elif token.type in [TokenType.AND, TokenType.OR, TokenType.NOT, TokenType.IMPLIES, TokenType.IFF]:
+        elif token.type in [TokenType.AND, TokenType.OR, TokenType.NOT, TokenType.IMPLIES, TokenType.IFF,
+                           TokenType.THEREFORE, TokenType.BECAUSE, TokenType.QED]:
             self._handle_logic(token)
         
         # Set theory
@@ -701,7 +786,8 @@ class MathFST:
         
         # Linear algebra
         elif token.type in [TokenType.MATRIX, TokenType.VECTOR, TokenType.DETERMINANT, 
-                           TokenType.TRANSPOSE, TokenType.INVERSE]:
+                           TokenType.TRANSPOSE, TokenType.INVERSE, TokenType.DOT_PRODUCT,
+                           TokenType.CROSS_PRODUCT, TokenType.MAGNITUDE, TokenType.NORM]:
             self._handle_linear_algebra(token)
         
         # Geometry
@@ -725,6 +811,8 @@ class MathFST:
             self._handle_approaches(token)
         elif token.type == TokenType.AS:
             self._handle_as(token)
+            # Explicitly return without adding to output to prevent 'as' from appearing
+            return
         elif token.type == TokenType.EQUALS:
             self._handle_equals(token)
         elif token.type == TokenType.DIFFERENTIAL:
@@ -733,6 +821,10 @@ class MathFST:
             self._handle_with_respect_to(token)
         elif token.type in [TokenType.SUCH_THAT, TokenType.FOR_ALL, TokenType.EXISTS]:
             self._handle_quantifier(token)
+        elif token.type in [TokenType.IS_POSITIVE, TokenType.IS_NEGATIVE, TokenType.IS_ZERO, 
+                           TokenType.IS_NONZERO, TokenType.IS_EVEN, TokenType.IS_ODD,
+                           TokenType.IS_PRIME, TokenType.IS_REAL, TokenType.IS_INTEGER]:
+            self._handle_property(token)
         
         # Basic elements
         elif token.type in [TokenType.VARIABLE, TokenType.NUMBER, TokenType.INFINITY]:
@@ -741,7 +833,14 @@ class MathFST:
             self._handle_operator(token)
         else:
             # Handle unknown tokens by passing them through with proper spacing
-            if token.original.lower() not in ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'defined']:
+            # Skip common English words and limit-specific words that don't belong in LaTeX
+            skip_words = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'defined', 'set', 'line', 'triangle']
+            
+            # For limits, also skip "as" 
+            if (self.context_stack and self.context_stack[-1] == 'limit'):
+                skip_words.extend(['as'])
+            
+            if token.original.lower() not in skip_words:
                 self.output_stack.append(f' {token.value} ')
             # Skip common English words that don't belong in LaTeX
     
@@ -764,6 +863,7 @@ class MathFST:
         self.context_stack.append('limit')
         self.state = State.INITIAL  # Start in initial state, wait for "as"
         self.current_bounds = {}
+        self.limit_pending = True  # Flag to track that we need to process limit bounds
     
     def _handle_sum(self, token: Token):
         """Handle summation tokens"""
@@ -806,8 +906,18 @@ class MathFST:
     
     def _handle_function(self, token: Token):
         """Handle function tokens (trig, log, etc.)"""
-        self.output_stack.append(f'{token.value}')
-        self.context_stack.append('function')
+        if token.type == TokenType.EXPONENTIAL:
+            if token.value.endswith('(-'):
+                # Special case: "exponential of negative" already has opening
+                self.output_stack.append(f'{token.value}')
+                self.context_stack.append('function_partial_open')
+            else:
+                # Regular exponential function
+                self.output_stack.append(f'{token.value}(')
+                self.context_stack.append('function_with_parens')
+        else:
+            self.output_stack.append(f'{token.value}')
+            self.context_stack.append('function')
         self.state = State.EXPECTING_ARGUMENT
     
     def _handle_from(self, token: Token):
@@ -833,19 +943,36 @@ class MathFST:
             self.state = State.EXPECTING_INTEGRAND
         elif self.context_stack and self.context_stack[-1] == 'limit':
             # For limits, "of" means we're done with bounds and ready for the function
+            # Ensure bounds are applied if they haven't been yet
+            if ('variable' in self.current_bounds and 'lower' in self.current_bounds and 
+                self.output_stack and r'\lim' in self.output_stack):
+                # Find the \lim token and check if it already has bounds
+                for i, item in enumerate(self.output_stack):
+                    if item == r'\lim':
+                        # Apply bounds if not already applied
+                        var = self.current_bounds.get('variable', 'x')
+                        self.output_stack[i] = f"\\lim_{{{var} \\to {self.current_bounds['lower']}}}"
+                        break
             self.state = State.EXPECTING_INTEGRAND
     
     def _handle_as(self, token: Token):
         """Handle 'as' in limits"""
         if self.context_stack and self.context_stack[-1] == 'limit':
             self.state = State.EXPECTING_BOUNDS
+            # Clear any existing bounds to start fresh
+            self.current_bounds = {}
+            # Don't add 'as' to output - it's handled by context
+            return  # Explicitly return to prevent 'as' from being added
+        # Don't add 'as' to output - it's handled by context
+        return
     
     def _handle_approaches(self, token: Token):
         """Handle 'approaches' in limits"""
         if self.context_stack and self.context_stack[-1] == 'limit':
-            if self.state != State.EXPECTING_BOUNDS:
-                self.state = State.EXPECTING_BOUNDS
+            self.state = State.EXPECTING_BOUNDS
             self.current_bounds['approaches'] = True
+            # Don't add 'approaches' to output - it's handled by context
+            return
     
     def _handle_equals(self, token: Token):
         """Handle 'equals' in bounds (especially for summations and products)"""
@@ -894,12 +1021,21 @@ class MathFST:
                         self._apply_bounds()
             elif self.context_stack and self.context_stack[-1] == 'limit':
                 # For limits: handle "x approaches zero"
-                if not self.current_bounds.get('variable'):
-                    self.current_bounds['variable'] = token.value
-                elif self.current_bounds.get('approaches'):
-                    self.current_bounds['lower'] = token.value
-                    self.current_bounds['approaches'] = False
-                    self._apply_bounds()
+                if self.state == State.EXPECTING_BOUNDS:
+                    if not self.current_bounds.get('variable'):
+                        self.current_bounds['variable'] = token.value
+                        return  # Don't add to output stack - it's used in bounds
+                    elif self.current_bounds.get('approaches'):
+                        # Convert token value to proper LaTeX if needed
+                        bound_value = self.tokenizer._convert_to_latex_value(token.type, token.value)
+                        self.current_bounds['lower'] = bound_value
+                        self.current_bounds['approaches'] = False
+                        self._apply_bounds()
+                        self.state = State.EXPECTING_INTEGRAND  # Ready for the function after bounds
+                        return  # Don't add to output stack - it's used in bounds
+                    else:
+                        # If we're in limit context but not expecting bounds, skip this token
+                        return
             elif self.context_stack and self.context_stack[-1] == 'integral':
                 # For integrals: handle "from 0 to infinity"
                 if self.current_bounds.get('lower_ready'):
@@ -940,7 +1076,16 @@ class MathFST:
         elif self.state == State.EXPECTING_ARGUMENT:
             self._close_function_argument(token.value)
         else:
-            self.output_stack.append(token.value)
+            # Special check: if we're in limit context and expecting bounds, don't add to output
+            if (self.context_stack and self.context_stack[-1] == 'limit' and
+                self.state == State.EXPECTING_BOUNDS):
+                # This operand should have been handled in the limit bounds logic above
+                # If we reach here, consume it silently as it's likely a bounds component
+                return
+
+            # Skip common English words that don't belong in LaTeX
+            if token.original.lower() not in ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'defined', 'set', 'line', 'triangle', 'as']:
+                self.output_stack.append(token.value)
     
     def _handle_operator(self, token: Token):
         """Handle mathematical operators"""
@@ -1020,6 +1165,19 @@ class MathFST:
             if self.output_stack:
                 base = self.output_stack.pop()
                 self.output_stack.append(f'{base}^{{-1}}')
+        elif token.type == TokenType.DOT_PRODUCT:
+            self.output_stack.append(r' \cdot ')
+        elif token.type == TokenType.CROSS_PRODUCT:
+            self.output_stack.append(r' \times ')
+        elif token.type == TokenType.MAGNITUDE or token.type == TokenType.NORM:
+            if 'inner product' in token.original.lower():
+                self.output_stack.append(r'\langle ')
+                self.context_stack.append('inner_product')
+                self.state = State.EXPECTING_ARGUMENT
+            else:
+                self.output_stack.append(r'\|')
+                self.context_stack.append('magnitude')
+                self.state = State.EXPECTING_ARGUMENT
     
     def _handle_geometry(self, token: Token):
         """Handle geometric operations"""
@@ -1054,6 +1212,10 @@ class MathFST:
         else:
             self.output_stack.append(token.value)
     
+    def _handle_property(self, token: Token):
+        """Handle mathematical properties (is positive, is negative, etc.)"""
+        self.output_stack.append(token.value)
+    
     def _apply_bounds(self):
         """Apply bounds to current mathematical construct"""
         if self.context_stack and self.current_bounds:
@@ -1067,12 +1229,22 @@ class MathFST:
                         break
             
             elif construct == 'limit' and 'lower' in self.current_bounds:
-                # Add limit bounds
+                # Add limit bounds - search more aggressively
+                applied = False
                 for i in range(len(self.output_stack) - 1, -1, -1):  # Search backwards
                     if self.output_stack[i] == r'\lim':
                         var = self.current_bounds.get('variable', 'x')
                         self.output_stack[i] = f"\\lim_{{{var} \\to {self.current_bounds['lower']}}}"
+                        applied = True
+                        self.limit_pending = False
                         break
+                
+                # If we couldn't find \lim, it might have been modified already
+                if not applied:
+                    for i in range(len(self.output_stack) - 1, -1, -1):
+                        if r'\lim' in str(self.output_stack[i]):
+                            # Already has bounds or is modified, skip
+                            break
             
             elif construct == 'sum' and 'lower' in self.current_bounds and 'upper' in self.current_bounds:
                 # Add summation bounds
@@ -1107,12 +1279,38 @@ class MathFST:
                 else:
                     self.output_stack.append(f' {argument}')
                 self.context_stack.pop()
+            elif context == 'function_with_parens':
+                # Close function that already has opening parenthesis
+                self.output_stack.append(f'{argument})')
+                self.context_stack.pop()
+            elif context == 'function_partial_open':
+                # Special case for "exponential of negative" - argument and close
+                self.output_stack.append(f'{argument})')
+                self.context_stack.pop()
+            elif context == 'magnitude':
+                # Close magnitude notation
+                self.output_stack.append(f'{argument}\\|')
+                self.context_stack.pop()
+            elif context == 'inner_product':
+                # Handle inner product arguments (expecting two arguments)
+                self.output_stack.append(f'{argument}, ')
+                # Note: This is simplified - a full implementation would handle multiple arguments
+                self.context_stack.pop()
             else:
                 self.output_stack.append(f' {argument}')
         self.state = State.INITIAL
     
     def _finalize(self):
         """Finalize any unclosed constructs"""
+        # Final check for limit bounds that haven't been applied
+        if (self.limit_pending and 'limit' in self.context_stack and 
+            'variable' in self.current_bounds and 'lower' in self.current_bounds):
+            for i in range(len(self.output_stack) - 1, -1, -1):
+                if self.output_stack[i] == r'\lim':
+                    var = self.current_bounds.get('variable', 'x')
+                    self.output_stack[i] = f"\\lim_{{{var} \\to {self.current_bounds['lower']}}}"
+                    break
+        
         while self.context_stack:
             context = self.context_stack.pop()
             if context == 'fraction':
@@ -1124,6 +1322,12 @@ class MathFST:
             elif context == 'function':
                 # Functions without arguments are OK as-is
                 pass
+            elif context == 'function_with_parens':
+                # Close unclosed function with parentheses
+                self.output_stack.append(')')
+            elif context == 'function_partial_open':
+                # Close unclosed function_partial_open
+                self.output_stack.append(')')
             elif context == 'absolute':
                 # Close absolute value
                 self.output_stack.append(r'\right|')
@@ -1139,119 +1343,21 @@ class MathFST:
                     self.output_stack.append(')')
                 else:
                     self.output_stack.append(']')
+            elif context == 'magnitude':
+                # Close magnitude/norm notation
+                self.output_stack.append(r'\|')
+            elif context == 'inner_product':
+                # Close inner product notation
+                self.output_stack.append(r'\rangle')
     
     def _generate_latex(self) -> str:
         """Generate final LaTeX output"""
         return ''.join(self.output_stack)
 
-def demo():
-    """Demonstration of the FST compiler"""
-    print("🔧 Text to LaTeX FST Compiler Demo")
-    print("=" * 50)
-    
-    compiler = MathFST()
-    
-    test_cases = [
-        # Basic calculus
-        "the integral from zero to infinity of x squared dx",
-        "derivative of sine x",
-        "partial derivative of x squared plus y squared",
-        "limit as x approaches zero of x over sin x",
-        "sum from i equals 1 to n of i squared",
-        "product from i equals 1 to n of i",
-        
-        # Functions
-        "square root of x plus y",
-        "absolute value of x minus y", 
-        "natural log of x",
-        "exponential of negative x",
-        "cosine of theta",
-        "inverse sine of x",
-        "hyperbolic sine of x",
-        
-        # Powers and operations
-        "x to the power of 3",
-        "x factorial",
-        "a over b plus c over d",
-        
-        # Linear algebra
-        "determinant of matrix A",
-        "vector v",
-        "transpose of matrix A",
-        "inverse of matrix B",
-        
-        # Set theory
-        "A union B",
-        "A intersection B", 
-        "x element of set S",
-        
-        # Logic
-        "A and B",
-        "A or B",
-        "not A",
-        "A implies B",
-        "for all x",
-        "there exists y",
-        
-        # Comparisons
-        "x less than y",
-        "x greater than or equal to y",
-        "x not equal to zero",
-        "x approximately equal to pi",
-        
-        # Geometry
-        "angle ABC",
-        "line AB parallel to line CD",
-        "triangle ABC congruent to triangle DEF",
-        
-        # Statistics
-        "probability of A",
-        "expected value of X",
-        "variance of Y",
-        
-        # Constants and special cases
-        "pi over 2",
-        "e to the power of x",
-        "infinity",
-        
-        # Complex expressions
-        "the integral from 0 to pi of sine x dx equals 2",
-        "for all x greater than 0, log x is defined",
-        "the limit as n approaches infinity of 1 over n equals 0"
-    ]
-    
-    print("\n🔄 Testing FST compilation:")
-    print("-" * 30)
-    
-    for i, test in enumerate(test_cases, 1):
-        try:
-            result = compiler.compile(test)
-            print(f"{i:2d}. Input:  {test}")
-            print(f"    LaTeX: {result}")
-            print()
-        except Exception as e:
-            print(f"❌ Error compiling '{test}': {e}")
-    
-    print("🧪 Interactive mode (type 'quit' to exit):")
-    print("-" * 40)
-    
-    while True:
-        try:
-            user_input = input("Enter mathematical expression: ").strip()
-            if user_input.lower() in ['quit', 'exit', 'q']:
-                break
-            
-            if user_input:
-                result = compiler.compile(user_input)
-                print(f"LaTeX: {result}\n")
-                
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            print(f"Error: {e}\n")
-    
-    print("👋 Thanks for using the FST compiler!")
-
-
 if __name__ == "__main__":
-    demo()
+    # Simple test instead of interactive demo
+    compiler = MathFST()
+    test = 'the limit as n approaches infinity of 1 over n equals 0'
+    result = compiler.compile(test)
+    print(f'Input:  {test}')
+    print(f'LaTeX:  {result}')
