@@ -300,13 +300,36 @@ class VoiceTranslator:
             return None
             
     def _speech_to_text(self, audio_path: str) -> str:
-        """Convert speech to text using Whisper"""
+        """Convert speech to text using Whisper with fallback handling"""
         try:
+            # Check if speech recognizer is available
+            if not hasattr(self, 'speech_recognizer') or self.speech_recognizer is None:
+                print("❌ Speech recognizer not available")
+                return "Speech recognition service unavailable"
+            
             result = self.speech_recognizer.transcribe(audio_path)
-            return result.strip() if result else ""
+            
+            # Handle various error responses
+            if not result:
+                return "No speech detected"
+            
+            result = result.strip()
+            
+            # Check for error messages in the result
+            if result.startswith("Speech recognition unavailable"):
+                return "Speech recognition service temporarily unavailable"
+            elif result.startswith("Transcription error"):
+                return "Audio processing failed"
+            elif result.startswith("Audio file not found"):
+                return "Audio file could not be processed"
+            elif result.startswith("Empty audio"):
+                return "No audio content detected"
+            
+            return result if result else "No speech detected"
+            
         except Exception as e:
             print(f"❌ Speech recognition failed: {e}")
-            return ""
+            return f"Speech recognition error: {str(e)}"
             
     def _text_to_latex(self, text: str) -> str:
         """Convert mathematical text to LaTeX using FST"""

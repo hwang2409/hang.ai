@@ -16,6 +16,13 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     wget \
     ca-certificates \
+    # Audio processing dependencies for speech recognition
+    portaudio19-dev \
+    libasound2-dev \
+    libsndfile1-dev \
+    ffmpeg \
+    # Additional ML dependencies
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Cloud SQL Auth Proxy v2
