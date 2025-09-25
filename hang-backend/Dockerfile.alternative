@@ -1,17 +1,21 @@
-# Use Python 3.11 slim image (more recent and reliable)
-FROM python:3.11-slim
+# Alternative Dockerfile using Ubuntu base image
+FROM ubuntu:22.04
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=backend.settings_production
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and Python
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-pip \
+        python3.11-dev \
         postgresql-client \
         build-essential \
         libpq-dev \
@@ -22,7 +26,9 @@ RUN apt-get update \
         libasound2-dev \
         libsndfile1-dev \
         ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/python3.11 /usr/bin/python \
+    && ln -s /usr/bin/pip3 /usr/bin/pip
 
 # Install Cloud SQL Auth Proxy v2
 RUN wget https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
