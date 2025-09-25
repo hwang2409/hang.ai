@@ -932,7 +932,13 @@ class MathFST:
     def _handle_to(self, token: Token):
         """Handle 'to' in bounds"""
         if self.state == State.EXPECTING_BOUNDS:
-            self.current_bounds['upper_ready'] = True
+            if self.context_stack and self.context_stack[-1] == 'limit':
+                # For limits, "to" should work like "approaches"
+                self.current_bounds['approaches'] = True
+                return  # Don't add 'to' to output in limit context
+            else:
+                # For integrals, sums, etc., use upper_ready
+                self.current_bounds['upper_ready'] = True
     
     def _handle_of(self, token: Token):
         """Handle 'of' transition"""
@@ -967,7 +973,7 @@ class MathFST:
         return
     
     def _handle_approaches(self, token: Token):
-        """Handle 'approaches' in limits"""
+        """Handle 'approaches' in limits (same as 'to' for limits)"""
         if self.context_stack and self.context_stack[-1] == 'limit':
             self.state = State.EXPECTING_BOUNDS
             self.current_bounds['approaches'] = True
@@ -1357,7 +1363,7 @@ class MathFST:
 if __name__ == "__main__":
     # Simple test instead of interactive demo
     compiler = MathFST()
-    test = 'the limit as n approaches infinity of 1 over n equals 0'
+    test = 'the limit as n to infinity of 1 over n equals 0'
     result = compiler.compile(test)
     print(f'Input:  {test}')
     print(f'LaTeX:  {result}')

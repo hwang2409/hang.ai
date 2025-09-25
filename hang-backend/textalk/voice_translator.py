@@ -309,6 +309,10 @@ class VoiceTranslator:
             
             result = self.speech_recognizer.transcribe(audio_path)
             
+            # Clean up memory after transcription (important for production)
+            if hasattr(self.speech_recognizer, 'cleanup_memory'):
+                self.speech_recognizer.cleanup_memory()
+            
             # Handle various error responses
             if not result:
                 return "No speech detected"
