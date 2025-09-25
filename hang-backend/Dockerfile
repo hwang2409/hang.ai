@@ -26,12 +26,11 @@ COPY . /app/
 # Create directories
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
+# Note: collectstatic will be run at startup when environment variables are available
 
 # Set default port
 ENV PORT=8000
 EXPOSE $PORT
 
-# Run the application directly with gunicorn
-CMD ["sh", "-c", "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"]
+# Run collectstatic and then start the application
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"]
