@@ -1,26 +1,20 @@
-# Use Ubuntu base image and install Python manually to avoid Docker Hub issues
-FROM ubuntu:22.04
+# Use Microsoft Container Registry Python image to avoid Docker Hub issues  
+FROM mcr.microsoft.com/devcontainers/python:3.11
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=backend.settings_production
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Set work directory
 WORKDIR /app
 
-# Install Python and system dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-pip \
-    python3.11-dev \
     postgresql-client \
     build-essential \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -s /usr/bin/python3.11 /usr/bin/python \
-    && ln -s /usr/bin/pip3 /usr/bin/pip
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt /app/
