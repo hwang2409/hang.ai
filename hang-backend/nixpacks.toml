@@ -1,11 +1,18 @@
 [phases.setup]
-nixPkgs = ["python39", "gcc", "postgresql"]
+nixPkgs = ["python311", "gcc", "postgresql", "pkg-config"]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
 
 [phases.build]
-cmds = ["python manage.py collectstatic --noinput"]
+cmds = [
+  "python manage.py collectstatic --noinput",
+  "mkdir -p media"
+]
+
+[variables]
+DJANGO_SETTINGS_MODULE = "backend.settings_production"
+PYTHONUNBUFFERED = "1"
 
 [start]
 cmd = "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"
