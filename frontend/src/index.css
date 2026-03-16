@@ -1,0 +1,680 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+@theme {
+  --color-bg: #0a0a0a;
+  --color-bg-secondary: #111111;
+  --color-bg-tertiary: #191919;
+  --color-bg-elevated: #222222;
+
+  --color-text: #d4d4d4;
+  --color-text-secondary: #606060;
+  --color-text-muted: #333333;
+
+  --color-border: #1c1c1c;
+
+  --color-primary: #d4d4d4;
+  --color-primary-hover: #ffffff;
+  --color-accent: #808080;
+
+  --color-danger: #884444;
+  --color-success: #4a7a4a;
+  --color-warning: #887744;
+}
+
+*, *::before, *::after {
+  scrollbar-width: thin;
+  scrollbar-color: #1c1c1c transparent;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1c1c1c; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #2a2a2a; }
+
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+::selection {
+  background: rgba(212, 212, 212, 0.12);
+}
+
+/* ── note selection ───────────────────────────────────────────── */
+
+.note-prose ::selection {
+  background: rgba(196, 167, 89, 0.18);
+  color: #f0e8d0;
+}
+.note-prose ::-moz-selection {
+  background: rgba(196, 167, 89, 0.18);
+  color: #f0e8d0;
+}
+
+/* When user is actively selecting — a subtle warm shift on the container */
+.note-prose.selecting {
+  caret-color: #c4a759;
+}
+
+/* Annotation highlight marks rendered inline */
+.annotation-mark {
+  background: rgba(196, 167, 89, 0.08);
+  border-bottom: 1px solid rgba(196, 167, 89, 0.25);
+  border-radius: 1px;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.annotation-mark:hover {
+  background: rgba(196, 167, 89, 0.16);
+  border-bottom-color: rgba(196, 167, 89, 0.5);
+}
+
+html {
+  background: #0a0a0a;
+  color-scheme: dark;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+
+body {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background: #0a0a0a;
+  color: #d4d4d4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.01em;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+
+/* ── light mode ────────────────────────────────────────────────── */
+
+html.light { background: #f5f3ee; }
+html.light body { background: #f5f3ee; color: #2a2a2a; }
+
+/* Surfaces */
+html.light [class*="bg-[#0a0a0a]"] { background-color: #f5f3ee !important; }
+html.light [class*="bg-[#0e0e0e]"] { background-color: #eae7e0 !important; }
+html.light [class*="bg-[#111111]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#131313]"] { background-color: #f7f5f0 !important; }
+html.light [class*="bg-[#141414]"] { background-color: #f0ede6 !important; }
+html.light [class*="bg-[#191919]"] { background-color: #e8e5de !important; }
+html.light [class*="bg-[#222222]"] { background-color: #ddd9d0 !important; }
+html.light .bg-bg { background-color: #f5f3ee !important; }
+
+/* Text */
+html.light [class*="text-[#d4d4d4]"] { color: #2a2a2a !important; }
+html.light [class*="text-[#e8e8e8]"] { color: #1a1a1a !important; }
+html.light [class*="text-[#e0e0e0]"] { color: #222222 !important; }
+html.light [class*="text-[#d8d8d8]"] { color: #333333 !important; }
+html.light [class*="text-[#b0b0b0]"] { color: #555555 !important; }
+html.light [class*="text-[#808080]"] { color: #666666 !important; }
+html.light [class*="text-[#606060]"] { color: #777777 !important; }
+html.light [class*="text-[#505050]"] { color: #888888 !important; }
+html.light [class*="text-[#404040]"] { color: #999999 !important; }
+html.light [class*="text-[#333333]"] { color: #aaaaaa !important; }
+html.light [class*="text-[#2a2a2a]"] { color: #bbbbbb !important; }
+html.light .text-text { color: #2a2a2a !important; }
+html.light .text-text-secondary { color: #777777 !important; }
+
+/* Borders */
+html.light [class*="border-[#1c1c1c]"] { border-color: #ddd9d0 !important; }
+html.light [class*="border-[#2a2a2a]"] { border-color: #ccc8bf !important; }
+html.light [class*="border-[#1a1a1a]"] { border-color: #ddd9d0 !important; }
+
+/* Placeholder text */
+html.light [class*="placeholder-[#333333]"]::placeholder { color: #bbbbbb !important; }
+
+/* Inverted primary buttons (light text on dark bg → dark text on light bg) */
+html.light [class*="bg-[#d4d4d4]"] { background-color: #2a2a2a !important; color: #f5f3ee !important; }
+html.light [class*="bg-[#d4d4d4]"]:hover { background-color: #111111 !important; }
+html.light [class*="text-[#0a0a0a]"] { color: #f5f3ee !important; }
+
+/* Focus ring */
+html.light :focus-visible { outline-color: #ccc8bf; }
+
+/* Scrollbar */
+html.light *, html.light *::before, html.light *::after { scrollbar-color: #ccc8bf transparent; }
+html.light ::-webkit-scrollbar-thumb { background: #ccc8bf; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #bbb7ae; }
+
+/* Selection */
+html.light ::selection { background: rgba(42, 42, 42, 0.1); }
+html.light .note-prose ::selection { background: rgba(180, 150, 60, 0.15); color: #3a3520; }
+html.light .note-prose ::-moz-selection { background: rgba(180, 150, 60, 0.15); color: #3a3520; }
+
+/* Prose overrides */
+html.light .prose { color: #2a2a2a; }
+html.light .prose h1, html.light .prose h2, html.light .prose strong { color: #111111; }
+html.light .prose h3 { color: #222222; }
+html.light .prose code { background: #eae7e0; color: #555555; }
+html.light .prose pre { background: #f0ede6; border-color: #ddd9d0; }
+html.light .prose pre code { color: #2a2a2a; }
+html.light .prose blockquote { border-left-color: #ccc8bf; color: #888888; }
+html.light .prose a { color: #2a2a2a; text-decoration-color: #bbbbbb; }
+html.light .prose a:hover { text-decoration-color: #777777; }
+html.light .prose th, html.light .prose td { border-color: #ddd9d0; }
+html.light .prose th { background: #eae7e0; color: #555555; }
+html.light .prose hr { border-color: #ddd9d0; }
+
+/* Annotation marks */
+html.light .annotation-mark { background: rgba(180, 150, 60, 0.06); border-bottom-color: rgba(180, 150, 60, 0.2); }
+html.light .annotation-mark:hover { background: rgba(180, 150, 60, 0.12); border-bottom-color: rgba(180, 150, 60, 0.4); }
+
+/* Modal/overlay backgrounds */
+html.light [class*="bg-[rgba(0,0,0"] { background-color: rgba(0,0,0,0.15) !important; }
+html.light .animate-modal-backdrop {
+  background: radial-gradient(ellipse at center, rgba(180, 150, 60, 0.02) 0%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+/* Semantic theme variable overrides for Tailwind utility classes */
+html.light { --color-bg: #f5f3ee; --color-bg-secondary: #ffffff; --color-bg-tertiary: #e8e5de; --color-bg-elevated: #ddd9d0; --color-text: #2a2a2a; --color-text-secondary: #777777; --color-text-muted: #aaaaaa; --color-border: #ddd9d0; --color-primary: #2a2a2a; --color-primary-hover: #111111; --color-accent: #666666; --color-danger: #aa4444; --color-success: #3a8a3a; --color-warning: #aa8833; }
+
+/* Transition all common properties for smooth theme switch */
+html.light *, html * {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 1px solid #333333;
+  outline-offset: 2px;
+}
+
+/* ── prose ──────────────────────────────────────────────────────── */
+
+.prose { color: #d4d4d4; line-height: 1.75; }
+.prose h1 { font-size: 1.5rem; font-weight: 600; margin: 1.5rem 0 1rem; color: #e8e8e8; letter-spacing: -0.02em; }
+.prose h2 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.75rem; color: #e0e0e0; letter-spacing: -0.01em; }
+.prose h3 { font-size: 1.1rem; font-weight: 500; margin: 1rem 0 0.5rem; color: #d8d8d8; }
+.prose p { margin-bottom: 0.75rem; }
+.prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.prose ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.prose li { margin-bottom: 0.25rem; }
+.prose code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: #151515;
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  color: #b0b0b0;
+}
+.prose pre {
+  background: #0e0e0e;
+  border: 1px solid #1c1c1c;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+.prose pre code { background: none; padding: 0; color: #d4d4d4; }
+.prose blockquote {
+  border-left: 2px solid #2a2a2a;
+  padding-left: 1rem;
+  font-style: italic;
+  color: #606060;
+  margin-bottom: 0.75rem;
+}
+.prose a { color: #d4d4d4; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #444444; }
+.prose a:hover { text-decoration-color: #888888; }
+.prose table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.prose th, .prose td { border: 1px solid #1c1c1c; padding: 0.5rem 0.75rem; text-align: left; }
+.prose th { background: #141414; font-weight: 500; color: #b0b0b0; }
+.prose img { max-width: 100%; border-radius: 6px; }
+.prose hr { margin: 1.5rem 0; border-color: #1c1c1c; }
+.prose strong { color: #e8e8e8; font-weight: 600; }
+
+/* ── wiki links ────────────────────────────────────────────────── */
+
+.prose .wiki-link { color: #c4a759; text-decoration: none; cursor: pointer; border-bottom: 1px solid rgba(196,167,89,0.3); transition: border-color 0.2s; }
+.prose .wiki-link:hover { border-bottom-color: #c4a759; }
+.prose .wiki-link.unresolved { color: #606060; border-bottom: 1px dashed rgba(96,96,96,0.4); cursor: default; }
+
+html.light .prose .wiki-link { color: #6965db; border-bottom-color: rgba(105,101,219,0.3); }
+html.light .prose .wiki-link:hover { border-bottom-color: #6965db; }
+html.light .prose .wiki-link.unresolved { color: #999; border-bottom-color: rgba(153,153,153,0.4); }
+
+/* ── wiki page content ──────────────────────────────────────── */
+
+.wiki-content.prose code { font-size: 0.85em; background: #191919; padding: 0.15em 0.35em; border-radius: 3px; color: #c4a759; }
+.wiki-content.prose strong { color: #e8e8e8; }
+.wiki-ref { color: #c4a759; border-bottom: 1px dashed rgba(196,167,89,0.3); }
+
+html.light .wiki-content.prose code { background: #eae7e0; color: #6965db; }
+html.light .wiki-ref { color: #6965db; border-bottom-color: rgba(105,101,219,0.3); }
+
+/* ── animation ─────────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.92) translateY(4px); }
+  70% { opacity: 1; transform: scale(1.01) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Toolbar rise — enters from below the selection with warm fade */
+@keyframes toolbar-rise {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+  60% { opacity: 1; transform: translate(-50%, -103%) scale(1.02); }
+  100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}
+
+.animate-toolbar-rise {
+  animation: toolbar-rise 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Staggered toolbar buttons */
+.toolbar-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.toolbar-stagger > *:nth-child(2) { animation-delay: 25ms; }
+.toolbar-stagger > *:nth-child(3) { animation-delay: 50ms; }
+.toolbar-stagger > *:nth-child(4) { animation-delay: 75ms; }
+.toolbar-stagger > *:nth-child(5) { animation-delay: 100ms; }
+
+@keyframes toolbar-btn-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toolbar-stagger > * {
+  animation: toolbar-btn-in 0.15s ease both;
+}
+
+/* Modal backdrop warm glow */
+@keyframes modal-glow-in {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(8px); }
+}
+
+.animate-modal-backdrop {
+  animation: modal-glow-in 0.25s ease both;
+  background: radial-gradient(ellipse at center, rgba(196, 167, 89, 0.03) 0%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease both;
+}
+
+.stagger-in > * { animation: fade-in 0.3s ease both; }
+.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 160ms; }
+.stagger-in > *:nth-child(6) { animation-delay: 200ms; }
+.stagger-in > *:nth-child(7) { animation-delay: 240ms; }
+.stagger-in > *:nth-child(8) { animation-delay: 280ms; }
+.stagger-in > *:nth-child(9) { animation-delay: 320ms; }
+
+/* ── search modal results ─────────────────────────────────────── */
+
+@keyframes search-result-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-results-stagger > button {
+  animation: search-result-in 0.18s ease both;
+}
+.search-results-stagger > button:nth-child(1) { animation-delay: 0ms; }
+.search-results-stagger > button:nth-child(2) { animation-delay: 30ms; }
+.search-results-stagger > button:nth-child(3) { animation-delay: 55ms; }
+.search-results-stagger > button:nth-child(4) { animation-delay: 75ms; }
+.search-results-stagger > button:nth-child(5) { animation-delay: 90ms; }
+.search-results-stagger > button:nth-child(6) { animation-delay: 105ms; }
+.search-results-stagger > button:nth-child(7) { animation-delay: 115ms; }
+.search-results-stagger > button:nth-child(8) { animation-delay: 125ms; }
+.search-results-stagger > button:nth-child(9) { animation-delay: 135ms; }
+.search-results-stagger > button:nth-child(10) { animation-delay: 140ms; }
+.search-results-stagger > button:nth-child(11) { animation-delay: 145ms; }
+.search-results-stagger > button:nth-child(12) { animation-delay: 150ms; }
+
+/* ── context menu ──────────────────────────────────────────────── */
+
+@keyframes context-menu-in {
+  0% { opacity: 0; transform: scale(0.92) translateY(-4px); }
+  60% { opacity: 1; transform: scale(1.01) translateY(1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.context-menu-enter {
+  animation: context-menu-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: top left;
+}
+
+@keyframes ctx-item-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.context-menu-stagger > * { animation: ctx-item-in 0.12s ease both; }
+.context-menu-stagger > *:nth-child(1) { animation-delay: 20ms; }
+.context-menu-stagger > *:nth-child(2) { animation-delay: 45ms; }
+.context-menu-stagger > *:nth-child(3) { animation-delay: 70ms; }
+.context-menu-stagger > *:nth-child(4) { animation-delay: 95ms; }
+.context-menu-stagger > *:nth-child(5) { animation-delay: 120ms; }
+.context-menu-stagger > *:nth-child(6) { animation-delay: 145ms; }
+.context-menu-stagger > *:nth-child(7) { animation-delay: 170ms; }
+
+/* ── theme toggle button ───────────────────────────────────────── */
+
+.theme-toggle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 90;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #1c1c1c;
+  background: linear-gradient(135deg, #141414 0%, #0e0e0e 100%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.35s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+.theme-toggle-btn:hover {
+  border-color: #2a2a2a;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(196,167,89,0.06);
+}
+
+html.light .theme-toggle-btn {
+  background: linear-gradient(135deg, #ffffff 0%, #f0ede6 100%);
+  border-color: #ddd9d0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+html.light .theme-toggle-btn:hover {
+  border-color: #ccc8bf;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+}
+
+.theme-toggle-track {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+
+.theme-toggle-icon {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-icon-visible {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+.theme-icon-hidden {
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.6);
+}
+
+.theme-toggle-btn .theme-icon-visible { color: #606060; }
+.theme-toggle-btn:hover .theme-icon-visible { color: #c4a759; }
+
+html.light .theme-toggle-btn .theme-icon-visible { color: #999999; }
+html.light .theme-toggle-btn:hover .theme-icon-visible { color: #8b7a3d; }
+
+/* ── codemirror / vim overrides ───────────────────────────────── */
+
+.vim-editor-wrapper { height: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1c1c1c; transition: border-color 0.2s ease; }
+.vim-editor-wrapper:focus-within { border-color: #333333; }
+.vim-editor-wrapper .cm-editor { height: 100%; }
+.vim-editor-wrapper .cm-scroller { scrollbar-width: thin; scrollbar-color: #1c1c1c transparent; }
+.vim-editor-wrapper .cm-panels { background: #0e0e0e; border-top: 1px solid #1c1c1c; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #808080; }
+.vim-editor-wrapper .cm-panels input { background: transparent; color: #d4d4d4; border: none; outline: none; font-family: inherit; }
+
+html.light .vim-editor-wrapper { border-color: #ddd9d0; }
+html.light .vim-editor-wrapper:focus-within { border-color: #ccc8bf; }
+html.light .vim-editor-wrapper .cm-panels { background: #f0ede6; border-top-color: #ddd9d0; color: #666666; }
+html.light .vim-editor-wrapper .cm-panels input { color: #2a2a2a; }
+html.light .vim-editor-wrapper .cm-scroller { scrollbar-color: #ccc8bf transparent; }
+
+/* CodeMirror autocomplete tooltip (wiki links) */
+.vim-editor-wrapper .cm-tooltip-autocomplete { background: #141414; border: 1px solid #1c1c1c; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); overflow: hidden; }
+.vim-editor-wrapper .cm-tooltip-autocomplete ul { font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; }
+.vim-editor-wrapper .cm-tooltip-autocomplete ul li { padding: 6px 12px; color: #d4d4d4; }
+.vim-editor-wrapper .cm-tooltip-autocomplete ul li[aria-selected] { background: rgba(196,167,89,0.12); color: #e8e8e8; }
+
+html.light .vim-editor-wrapper .cm-tooltip-autocomplete { background: #ffffff; border-color: #ddd9d0; box-shadow: 0 8px 32px rgba(0,0,0,0.07); }
+html.light .vim-editor-wrapper .cm-tooltip-autocomplete ul li { color: #2a2a2a; }
+html.light .vim-editor-wrapper .cm-tooltip-autocomplete ul li[aria-selected] { background: rgba(105,101,219,0.1); color: #111111; }
+
+/* Kill the global theme transition inside CM — it makes selections/cursors animate sluggishly */
+.vim-editor-wrapper *, .vim-editor-wrapper *::before, .vim-editor-wrapper *::after { transition: none !important; }
+
+/* ── excalidraw canvas overrides ──────────────────────────────── */
+
+/* Tame excalidraw's default island/toolbar bg to match our palette */
+.excalidraw {
+  --island-bg-color: #111111 !important;
+  --color-surface-primary-container: #191919 !important;
+  --color-surface-low: #0e0e0e !important;
+  --color-gray-20: #1c1c1c !important;
+  --color-gray-40: #2a2a2a !important;
+  --dialog-border-color: #1c1c1c !important;
+  --button-hover-bg: rgba(255,255,255,0.04) !important;
+  --button-active-border: #2a2a2a !important;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Toolbar islands — frosted glass */
+.excalidraw .Island {
+  background: rgba(17, 17, 17, 0.85) !important;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(28, 28, 28, 0.8) !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.3),
+    0 0 0 1px rgba(255,255,255,0.02) inset !important;
+}
+
+/* Top toolbar (shapes) — subtle warm top-edge glow */
+.excalidraw .App-toolbar-container .Island::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(196,167,89,0.08), transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* Selected tool highlight */
+.excalidraw .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon,
+.excalidraw .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon {
+  background: rgba(196,167,89,0.08) !important;
+  box-shadow: 0 0 0 1px rgba(196,167,89,0.15) inset !important;
+}
+.excalidraw .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon svg,
+.excalidraw .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon svg {
+  color: #c4a759 !important;
+}
+
+/* Push excalidraw's top-left menu down so it doesn't overlap our floating toolbar */
+.canvas-editor-wrapper .excalidraw .App-menu_top > *:first-child {
+  margin-top: 52px;
+}
+
+/* Hide excalidraw's help button — we don't need it */
+.canvas-editor-wrapper .excalidraw .HelpButton,
+.canvas-editor-wrapper .excalidraw [class*="HelpButton"],
+.canvas-editor-wrapper .excalidraw .layer-ui__wrapper__footer-right .zen-mode-transition {
+  display: none !important;
+}
+
+/* Hide the global theme toggle when canvas is open */
+.canvas-editor-wrapper ~ .theme-toggle-btn,
+body:has(.canvas-editor-wrapper) .theme-toggle-btn {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Popover/dropdown menus */
+.excalidraw [data-radix-popper-content-wrapper] > div,
+.excalidraw .popover {
+  background: rgba(17,17,17,0.95) !important;
+  backdrop-filter: blur(16px);
+  border: 1px solid #1c1c1c !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+}
+
+/* Disable the jarring global transition on excalidraw internals */
+.excalidraw *,
+.excalidraw *::before,
+.excalidraw *::after {
+  transition: none !important;
+}
+/* Re-enable only on our interactive elements */
+.excalidraw .ToolIcon__icon,
+.excalidraw .Island,
+.excalidraw button {
+  transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease !important;
+}
+
+/* ── excalidraw light mode ──── */
+
+html.light .excalidraw {
+  --island-bg-color: #ffffff !important;
+  --color-surface-primary-container: #f7f7f9 !important;
+  --color-surface-low: #fafafa !important;
+  --color-gray-20: #e6e6eb !important;
+  --color-gray-40: #d0d0d8 !important;
+  --dialog-border-color: #e6e6eb !important;
+  --button-hover-bg: rgba(0,0,0,0.03) !important;
+  --button-active-border: #d0d0d8 !important;
+}
+
+html.light .excalidraw .Island {
+  background: rgba(255,255,255,0.92) !important;
+  border-color: rgba(230,230,235,0.8) !important;
+  box-shadow:
+    0 2px 16px rgba(0,0,0,0.06),
+    0 0 0 1px rgba(0,0,0,0.03) inset !important;
+}
+
+html.light .excalidraw .App-toolbar-container .Island::before {
+  background: linear-gradient(90deg, transparent, rgba(105,101,219,0.06), transparent);
+}
+
+html.light .excalidraw .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon,
+html.light .excalidraw .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon {
+  background: rgba(105,101,219,0.06) !important;
+  box-shadow: 0 0 0 1px rgba(105,101,219,0.12) inset !important;
+}
+html.light .excalidraw .ToolIcon .ToolIcon_type_radio:checked + .ToolIcon__icon svg,
+html.light .excalidraw .ToolIcon .ToolIcon_type_checkbox:checked + .ToolIcon__icon svg {
+  color: #6965db !important;
+}
+
+html.light .excalidraw [data-radix-popper-content-wrapper] > div,
+html.light .excalidraw .popover {
+  background: rgba(255,255,255,0.97) !important;
+  border-color: #e6e6eb !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.07) !important;
+}
+
+/* ── canvas floating toolbar ─────────────────────────────────── */
+
+@keyframes canvas-toolbar-in {
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.canvas-toolbar {
+  animation: canvas-toolbar-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  transition: opacity 0.3s ease;
+}
+.canvas-toolbar.toolbar-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Keep toolbar inputs interactive and styled */
+.canvas-toolbar input,
+.canvas-tags-popover input {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+.canvas-toolbar input::placeholder,
+.canvas-tags-popover input::placeholder {
+  color: #333333;
+}
+html.light .canvas-toolbar input::placeholder,
+html.light .canvas-tags-popover input::placeholder {
+  color: #bbbbbb;
+}
+
+/* Tags popover drop-in */
+@keyframes tags-popover-in {
+  0% { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.canvas-tags-popover {
+  animation: tags-popover-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top left;
+}
+
+/* Canvas chat panel — slide in from right, frosted glass bg */
+@keyframes canvas-chat-in {
+  0% { opacity: 0; transform: translateX(20px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.canvas-chat-panel {
+  animation: canvas-chat-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Make NoteSidebar transparent inside the frosted panel */
+.canvas-chat-panel > div {
+  background: transparent !important;
+  border-left: none !important;
+}
+.canvas-chat-panel .border-b { border-color: rgba(255,255,255,0.04); }
+.canvas-chat-panel .border-t { border-color: rgba(255,255,255,0.04); }
+html.light .canvas-chat-panel .border-b { border-color: rgba(0,0,0,0.06) !important; }
+html.light .canvas-chat-panel .border-t { border-color: rgba(0,0,0,0.06) !important; }
+html.light .canvas-chat-panel [class*="bg-[#0e0e0e]"] { background-color: rgba(247,247,249,0.9) !important; }
+html.light .canvas-chat-panel [class*="bg-[#111111]"] { background-color: rgba(255,255,255,0.8) !important; }
+html.light .canvas-chat-panel [class*="border-[#1c1c1c]"] { border-color: rgba(230,230,235,0.8) !important; }
+html.light .canvas-chat-panel [class*="bg-[#191919]"] { background-color: rgba(240,240,245,0.9) !important; }
+
+/* ── canvas card on home grid ────────────────────────────────── */
+
+.canvas-card-pattern {
+  background-image: radial-gradient(circle, #1c1c1c 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 8px 8px;
+}
+
+html.light .canvas-card-pattern {
+  background-image: radial-gradient(circle, #ddd9d0 1px, transparent 1px);
+}
+
+/* ── sidebar info panel: compact markdown/katex ──────────────── */
+
+.sidebar-info-title .prose { font-size: inherit; line-height: inherit; }
+.sidebar-info-title .prose p { margin: 0; }
+.sidebar-info-title .prose h1,
+.sidebar-info-title .prose h2,
+.sidebar-info-title .prose h3 { font-size: inherit; margin: 0; }
+
+.sidebar-info-body .prose { font-size: inherit; color: inherit; line-height: inherit; }
+.sidebar-info-body .prose p { margin: 0 0 0.5em 0; }
+.sidebar-info-body .prose p:last-child { margin-bottom: 0; }
+.sidebar-info-body .prose code { font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 0.1em 0.3em; border-radius: 3px; }
+
+.sidebar-info-title .katex,
+.sidebar-info-body .katex { font-size: 0.95em; }

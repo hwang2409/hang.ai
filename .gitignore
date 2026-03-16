@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build output
+frontend/dist/
+
+# Environment
+.env
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
