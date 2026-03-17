@@ -1,13 +1,15 @@
 import hashlib
 import json
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from starlette.responses import Response
+from starlette.responses import Response, FileResponse
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -299,6 +301,76 @@ async def delete_folder(
 
     await db.delete(folder)
     await db.commit()
+
+
+# ── Markdown Zip Export ───────────────────────────────────────────────────
+
+@router.get("/export/markdown-zip")
+async def export_markdown_zip(
+    background_tasks: BackgroundTasks,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export all user notes as a zip of markdown files."""
+    from jose import JWTError, jwt as jose_jwt
+    from app.config import settings
+
+    try:
+        payload = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = int(payload.get("sub", 0))
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    import zipfile
+
+    result = await db.execute(
+        select(Document).where(
+            Document.user_id == user_id,
+            Document.deleted == False,  # noqa: E712
+            Document.type == "text",
+        )
+    )
+    docs = result.scalars().all()
+
+    if not docs:
+        raise HTTPException(status_code=404, detail="No text notes to export")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    try:
+        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zf:
+            seen_names = {}
+            for doc in docs:
+                safe_title = re.sub(r'[^\w\s-]', '', doc.title or 'Untitled').strip().replace(' ', '_')[:60]
+                if not safe_title:
+                    safe_title = f"note_{doc.id}"
+                # Handle duplicate names
+                if safe_title in seen_names:
+                    seen_names[safe_title] += 1
+                    safe_title = f"{safe_title}_{seen_names[safe_title]}"
+                else:
+                    seen_names[safe_title] = 0
+                filename = f"{safe_title}.md"
+
+                # Build markdown content with frontmatter
+                content_parts = [f"# {doc.title or 'Untitled'}\n\n"]
+                if doc.content:
+                    content_parts.append(doc.content)
+                zf.writestr(filename, "".join(content_parts))
+        tmp.close()
+    except Exception:
+        tmp.close()
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail="Failed to create zip")
+
+    background_tasks.add_task(os.unlink, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/zip",
+        filename="hang-notes-export.zip",
+        headers={"Content-Disposition": 'attachment; filename="hang-notes-export.zip"'},
+    )
 
 
 # ── Documents (by ID) ─────────────────────────────────────────────────────────
@@ -707,6 +779,214 @@ async def trigger_document_analysis(
 
     background_tasks.add_task(analyze_document_background, doc.id, doc.content or "", doc.title or "")
     return {"status": "analyzing"}
+
+
+# ── Cheat Sheet Generation ─────────────────────────────────────────────────
+
+@router.post("/{doc_id}/cheatsheet")
+async def generate_cheatsheet(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a concise cheat sheet / reference card from note content."""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == current_user.id,
+            Document.deleted == False,  # noqa: E712
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not doc.content or len(doc.content.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Note has insufficient content for a cheat sheet")
+
+    from app.llm.service import evaluate_text
+    from app.llm.response_parser import parse_llm_json
+
+    prompt = f"""Create a concise, exam-ready cheat sheet from the following study material.
+
+Title: {doc.title or 'Untitled'}
+
+Content:
+{doc.content[:6000]}
+
+Return ONLY a JSON object with these fields:
+- "title": string — cheat sheet title
+- "sections": array of {{ "heading": string, "points": [string] }} — organized key points (max 6 sections, max 8 points each)
+- "key_facts": array of strings — essential facts to memorize (max 10)
+- "formulas": array of {{ "latex": string, "description": string }} — key formulas if applicable (max 8)
+- "mnemonics": array of strings — memory aids or tricks (max 5)
+- "common_mistakes": array of strings — common errors to avoid (max 5)
+
+Keep each point brief (1-2 sentences max). Prioritize memorability and exam relevance. If a field has no items, use an empty array."""
+
+    try:
+        raw = await evaluate_text(prompt)
+        cheatsheet = parse_llm_json(raw)
+        for key in ("title", "sections", "key_facts", "formulas", "mnemonics", "common_mistakes"):
+            if key not in cheatsheet:
+                cheatsheet[key] = [] if key != "title" else (doc.title or "Cheat Sheet")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate cheat sheet")
+
+    return cheatsheet
+
+
+# ── Outline Generation ────────────────────────────────────────────────────
+
+@router.post("/{doc_id}/outline")
+async def generate_outline(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a structured outline from note content using LLM."""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == current_user.id,
+            Document.deleted == False,  # noqa: E712
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not doc.content or len(doc.content.strip()) < 50:
+        raise HTTPException(status_code=400, detail="Note has insufficient content for an outline")
+
+    from app.llm.service import evaluate_text
+    from app.llm.response_parser import parse_llm_json
+
+    prompt = f"""Create a structured outline from the following study material. Extract the key hierarchy of ideas.
+
+Title: {doc.title or 'Untitled'}
+
+Content:
+{doc.content[:6000]}
+
+Return ONLY a JSON object with these fields:
+- "title": string — outline title
+- "items": array of outline items, where each item has:
+  - "text": string — the outline point
+  - "level": integer — nesting level (1 = top level, 2 = sub-point, 3 = sub-sub-point)
+  - "children": array of child items (same structure, recursive) — optional, can be empty array
+
+Keep the outline concise and well-organized. Maximum 4 levels of depth. Focus on the logical structure and flow of ideas."""
+
+    try:
+        raw = await evaluate_text(prompt)
+        outline = parse_llm_json(raw)
+        if "title" not in outline:
+            outline["title"] = doc.title or "Outline"
+        if "items" not in outline:
+            outline["items"] = []
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate outline")
+
+    return outline
+
+
+# ── PDF Export ─────────────────────────────────────────────────────────────
+
+_PDF_CSS = """
+body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 40px; }
+h1 { font-size: 22pt; font-weight: 600; margin-bottom: 4px; color: #111; }
+h2 { font-size: 16pt; font-weight: 600; margin-top: 24px; color: #222; }
+h3 { font-size: 13pt; font-weight: 600; margin-top: 20px; color: #333; }
+h4, h5, h6 { font-size: 11pt; font-weight: 600; margin-top: 16px; }
+p { margin: 8px 0; }
+.subtitle { font-size: 9pt; color: #888; margin-bottom: 24px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 10pt; }
+th { background-color: #f5f5f5; font-weight: 600; }
+pre { background-color: #f5f5f5; padding: 10px 12px; border-radius: 4px; font-size: 9pt; overflow-x: auto; }
+code { font-family: 'Courier New', monospace; font-size: 9pt; background-color: #f0f0f0; padding: 1px 4px; border-radius: 2px; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 3px solid #ccc; margin: 12px 0; padding: 4px 16px; color: #555; }
+ul, ol { padding-left: 24px; }
+li { margin: 4px 0; }
+hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+"""
+
+
+@router.get("/{doc_id}/export/pdf")
+async def export_pdf(
+    doc_id: int,
+    background_tasks: BackgroundTasks,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export a text note as a styled PDF."""
+    from jose import JWTError, jwt as jose_jwt
+    from app.config import settings
+    try:
+        payload = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = int(payload.get("sub", 0))
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == user_id,
+            Document.deleted == False,  # noqa: E712
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if doc.type in ("canvas", "moodboard"):
+        raise HTTPException(status_code=400, detail="PDF export is only available for text notes")
+
+    import markdown as md
+    from xhtml2pdf import pisa
+
+    html_body = md.markdown(
+        doc.content or "",
+        extensions=["tables", "fenced_code", "codehilite"],
+    )
+
+    title = doc.title or "Untitled"
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>{_PDF_CSS}</style></head>
+<body>
+<h1>{title}</h1>
+<div class="subtitle">Exported from Hang.ai</div>
+{html_body}
+</body></html>"""
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    try:
+        pisa_status = pisa.CreatePDF(html, dest=tmp)
+        tmp.close()
+        if pisa_status.err:
+            os.unlink(tmp.name)
+            raise HTTPException(status_code=500, detail="PDF generation failed")
+    except HTTPException:
+        raise
+    except Exception:
+        tmp.close()
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+
+    safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:60]
+    filename = f"{safe_title}.pdf"
+
+    background_tasks.add_task(os.unlink, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Tags ───────────────────────────────────────────────────────────────────────

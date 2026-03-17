@@ -52,6 +52,19 @@ export const api = {
     return res.json()
   },
 
+  // File download via token-in-URL (browser handles Content-Disposition)
+  download: (path) => {
+    const token = getToken()
+    const sep = path.includes('?') ? '&' : '?'
+    const url = `${API_BASE}${path}${sep}token=${token}`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = ''
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  },
+
   // SSE streaming for chat
   stream: async function* (path, data) {
     const token = getToken()

@@ -1,7 +1,30 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
+
+
+class WeeklyQuizAccuracy(BaseModel):
+    week: str  # ISO date of week start (Monday)
+    avg_pct: float
+    count: int
+
+
+class WeeklyFlashcardRetention(BaseModel):
+    week: str
+    retention_pct: float
+    total: int
+
+
+class WeeklyStudyMinutes(BaseModel):
+    week: str
+    minutes: int
+
+
+class TrendsResponse(BaseModel):
+    quiz_accuracy: list[WeeklyQuizAccuracy] = []
+    flashcard_retention: list[WeeklyFlashcardRetention] = []
+    study_minutes: list[WeeklyStudyMinutes] = []
 
 
 class DueFlashcard(BaseModel):
@@ -44,6 +67,30 @@ class StudyPlanToday(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BriefItem(BaseModel):
+    type: Literal[
+        "flashcard_review",
+        "quiz_retake",
+        "overdue_todo",
+        "study_plan",
+        "feynman_retry",
+        "stale_note",
+        "upcoming_todo",
+    ]
+    priority: Literal[1, 2, 3]
+    title: str
+    subtitle: str = ""
+    link: str
+    meta: dict = {}
+
+
+class QuizBriefInfo(BaseModel):
+    quiz_id: int
+    quiz_title: str
+    last_score_pct: int
+    attempt_count: int
+
+
 class DashboardReview(BaseModel):
     due_flashcards: list[DueFlashcard] = []
     due_flashcard_count: int = 0
@@ -53,3 +100,9 @@ class DashboardReview(BaseModel):
     stale_notes: list[StaleNote] = []
     study_plan_today: list[StudyPlanToday] = []
     current_streak: int = 0
+    quiz_retakes: list[QuizBriefInfo] = []
+    brief_items: list[BriefItem] = []
+    # Daily study brief
+    greeting: str = ""
+    study_next: Optional[BriefItem] = None
+    estimated_minutes: int = 0

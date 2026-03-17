@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, FileText, ExternalLink, Info } from 'lucide-react'
+import { ArrowLeft, MessageSquare, FileText, ExternalLink, Info, Mic } from 'lucide-react'
 import { api, getToken } from '../lib/api'
 import { useChat } from '../hooks/useChat'
 import Layout from '../components/Layout'
@@ -8,6 +8,7 @@ import NoteSidebar from '../components/NoteSidebar'
 import PdfViewer from '../components/PdfViewer'
 import ImageViewer from '../components/ImageViewer'
 import VideoPlayer from '../components/VideoPlayer'
+import AudioPlayer from '../components/AudioPlayer'
 import SelectionToolbar from '../components/SelectionToolbar'
 import AnnotationEditor from '../components/AnnotationEditor'
 
@@ -28,6 +29,8 @@ export default function FileView() {
   const [chatInput, setChatInput] = useState('')
   const [converting, setConverting] = useState(false)
   const [linkText, setLinkText] = useState(null)
+  const [transcriptText, setTranscriptText] = useState(null)
+  const [transcribing, setTranscribing] = useState(false)
 
   // Annotation state
   const [annotations, setAnnotations] = useState([])
@@ -38,6 +41,7 @@ export default function FileView() {
 
   const pdfRef = useRef(null)
   const videoRef = useRef(null)
+  const audioRef = useRef(null)
 
   const fileId = parseInt(id, 10)
 
@@ -75,6 +79,45 @@ export default function FileView() {
       api.get(`/files/${id}/text`).then(data => setLinkText(data.text)).catch(() => {})
     }
   }, [file, id])
+
+  // Load transcript for audio files + poll while pending
+  useEffect(() => {
+    if (file?.file_type !== 'audio') return
+
+    if (file.has_extracted_text) {
+      api.get(`/files/${id}/text`).then(data => setTranscriptText(data.text)).catch(() => {})
+      return
+    }
+
+    // Poll for transcription completion
+    if (file.transcription_status === 'pending') {
+      const interval = setInterval(async () => {
+        try {
+          const updated = await api.get(`/files/${id}`)
+          if (updated.has_extracted_text) {
+            setFile(updated)
+            const data = await api.get(`/files/${id}/text`)
+            setTranscriptText(data.text)
+            clearInterval(interval)
+          }
+        } catch {}
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [file?.file_type, file?.has_extracted_text, file?.transcription_status, id])
+
+  const handleTranscribe = async () => {
+    if (transcribing) return
+    setTranscribing(true)
+    try {
+      await api.post(`/files/${id}/transcribe`)
+      setFile(prev => ({ ...prev, transcription_status: 'pending' }))
+    } catch (err) {
+      console.error('Transcription request failed:', err)
+    } finally {
+      setTranscribing(false)
+    }
+  }
 
   // Load existing chat thread for this file
   useEffect(() => {
@@ -236,6 +279,8 @@ export default function FileView() {
       pdfRef.current.goToPage(ann.page_number)
     } else if (ann.timestamp != null && videoRef.current) {
       videoRef.current.seekTo(ann.timestamp)
+    } else if (ann.timestamp != null && audioRef.current) {
+      audioRef.current.seekTo(ann.timestamp)
     }
   }, [])
 
@@ -243,6 +288,7 @@ export default function FileView() {
   const fileUrl = file ? `/files/${file.id}/serve?token=${encodeURIComponent(token)}` : null
 
   const isVideo = file?.file_type === 'video'
+  const isAudio = file?.file_type === 'audio'
   const isLink = file?.file_type === 'link'
   const linkDomain = file?.metadata?.domain || ''
   const isYouTubeLink = isLink && (linkDomain.includes('youtube') || file?.source_url?.includes('youtu.be'))
@@ -366,7 +412,37 @@ export default function FileView() {
               )}
             </div>
           )}
-          {file.file_type !== 'pdf' && file.file_type !== 'image' && !isVideo && !isLink && (
+          {isAudio && fileUrl && (
+            <div className="flex flex-col h-full">
+              <AudioPlayer ref={audioRef} fileUrl={fileUrl} onAnnotateClick={handleVideoAnnotate} />
+              {/* Transcript section */}
+              <div className="border-t border-[#1c1c1c] flex-1 min-h-0 overflow-y-auto p-6">
+                {transcriptText ? (
+                  <div>
+                    <h3 className="text-xs font-medium text-[#606060] uppercase tracking-wider mb-3">transcript</h3>
+                    <pre className="text-[#d4d4d4] text-sm whitespace-pre-wrap font-sans leading-relaxed max-w-3xl">
+                      {transcriptText}
+                    </pre>
+                  </div>
+                ) : file.transcription_status === 'pending' ? (
+                  <div className="flex items-center gap-2 text-[#606060] text-sm">
+                    <div className="animate-spin h-3.5 w-3.5 border border-[#606060] border-t-transparent rounded-full" />
+                    transcribing audio...
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleTranscribe}
+                    disabled={transcribing}
+                    className="flex items-center gap-2 text-sm text-[#606060] hover:text-[#d4d4d4] transition-colors disabled:opacity-50"
+                  >
+                    <Mic size={14} />
+                    {transcribing ? 'requesting...' : 'transcribe audio'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {file.file_type !== 'pdf' && file.file_type !== 'image' && !isVideo && !isAudio && !isLink && (
             <div className="flex-1 flex items-center justify-center text-[#606060] text-sm">
               preview not available for {file.file_type} files yet
             </div>

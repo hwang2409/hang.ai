@@ -9,6 +9,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class FlashcardReview(Base):
+    __tablename__ = "flashcard_reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    card_id: Mapped[int] = mapped_column(ForeignKey("flashcards.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    quality: Mapped[int] = mapped_column()  # 0-5 SM2 rating
+    reviewed_at: Mapped[datetime] = mapped_column(default=func.now())
+
+
 class Flashcard(Base):
     __tablename__ = "flashcards"
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, Sparkles, Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, RotateCcw, AlertTriangle } from 'lucide-react'
+import { Play, Sparkles, Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import ContextMenu from '../components/ContextMenu'
@@ -236,6 +236,13 @@ export default function Flashcards() {
           >
             {showCreate ? <ChevronUp size={16} /> : <Plus size={16} />}
             create card
+          </button>
+          <button
+            onClick={() => api.download('/flashcards/export/anki')}
+            className="border border-[#1c1c1c] text-[#606060] hover:text-[#d4d4d4] hover:border-[#2a2a2a] rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2"
+          >
+            <Download size={16} />
+            export to anki
           </button>
         </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag } from 'lucide-react'
+import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import { getCached, setCache, updateCacheMessages } from '../lib/noteThreadCache'
 import { useChat } from '../hooks/useChat'
@@ -1016,6 +1016,15 @@ export default function NoteEdit() {
             <span>{mode === 'write' ? 'writing' : 'reading'}</span>
             <span className="text-[#333333]">⌘E</span>
           </button>
+          {!isCanvas && !isMoodboard && (
+            <button
+              onClick={() => api.download(`/notes/${id}/export/pdf`)}
+              className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
+              title="Export as PDF"
+            >
+              <Download size={18} />
+            </button>
+          )}
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className={`p-2 rounded-md transition-colors ${chatOpen ? 'bg-[#191919] text-[#d4d4d4]' : 'text-[#333333] hover:text-[#606060]'}`}

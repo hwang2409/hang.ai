@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, FileText, Image, Film, Music, Trash2, Link2, Globe, Loader2 } from 'lucide-react'
+import { Upload, FileText, Image, Film, Music, Trash2, Link2, Globe, Loader2, Mic } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
+import VoiceRecorder from '../components/VoiceRecorder'
 
 const TYPE_ICONS = {
   pdf: FileText,
@@ -40,7 +41,7 @@ function getDomain(url) {
   try { return new URL(url).hostname.replace('www.', '') } catch { return '' }
 }
 
-const ACCEPTED = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.mp3,.wav,.m4a,.pptx'
+const ACCEPTED = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov,.mp3,.wav,.m4a,.ogg,.pptx'
 
 export default function Library() {
   const [files, setFiles] = useState([])
@@ -50,6 +51,7 @@ export default function Library() {
   const [dragOver, setDragOver] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [importingUrl, setImportingUrl] = useState(false)
+  const [showRecorder, setShowRecorder] = useState(false)
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
 
@@ -113,6 +115,24 @@ export default function Library() {
     }
   }
 
+  const handleRecordingComplete = async (blob, mimeType, ext) => {
+    setShowRecorder(false)
+    setUploading(true)
+    try {
+      const now = new Date()
+      const name = `Recording ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}${ext}`
+      const file = new File([blob], name, { type: mimeType })
+      const formData = new FormData()
+      formData.append('file', file)
+      await api.upload('/files', formData)
+      await fetchFiles()
+    } catch (err) {
+      console.error('Recording upload failed:', err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
@@ -141,18 +161,27 @@ export default function Library() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-2xl font-semibold text-text tracking-tight">library</h1>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="bg-[#d4d4d4] text-[#0a0a0a] hover:bg-white font-medium rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
-            >
-              {uploading ? (
-                <div className="animate-spin h-4 w-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full" />
-              ) : (
-                <Upload size={16} />
-              )}
-              upload
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowRecorder(true)}
+                className="bg-[#191919] text-[#d4d4d4] hover:bg-[#222222] border border-[#1c1c1c] font-medium rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2"
+              >
+                <Mic size={16} />
+                record
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="bg-[#d4d4d4] text-[#0a0a0a] hover:bg-white font-medium rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {uploading ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full" />
+                ) : (
+                  <Upload size={16} />
+                )}
+                upload
+              </button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -296,6 +325,13 @@ export default function Library() {
           )}
         </div>
       </div>
+
+      {showRecorder && (
+        <VoiceRecorder
+          onRecordingComplete={handleRecordingComplete}
+          onCancel={() => setShowRecorder(false)}
+        />
+      )}
     </Layout>
   )
 }

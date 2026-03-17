@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, FileText, PenTool, LayoutGrid, X, ArrowUp, ArrowDown, CornerDownLeft, Sparkles, TextSearch } from 'lucide-react'
+import { Search, FileText, PenTool, LayoutGrid, X, ArrowUp, ArrowDown, CornerDownLeft, Sparkles, TextSearch, Zap } from 'lucide-react'
 import { api } from '../lib/api'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -86,7 +86,7 @@ export default function SearchModal() {
       e.preventDefault()
       const selected = results[selectedIndex]
       if (selected) {
-        navigate(`/notes/${selected.id}`)
+        navigate(selected.source === 'flashcard' ? '/flashcards' : `/notes/${selected.id}`)
         setOpen(false)
       }
     }
@@ -174,7 +174,7 @@ export default function SearchModal() {
             onKeyDown={handleKeyDown}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
-            placeholder="search notes..."
+            placeholder="search notes & cards..."
             className={`flex-1 bg-transparent text-[15px] outline-none tracking-tight ${
               dark
                 ? 'text-[#d4d4d4] placeholder-[#2a2a2a]'
@@ -241,7 +241,7 @@ export default function SearchModal() {
             <div className="px-5 py-10 flex flex-col items-center gap-2 animate-fade-in">
               <TextSearch size={20} style={{ color: dark ? '#1c1c1c' : '#ddd9d0' }} />
               <p className="text-[11px]" style={{ color: dark ? '#333333' : '#aaaaaa' }}>
-                no notes matched "{query.length > 30 ? query.slice(0, 30) + '...' : query}"
+                no results matched "{query.length > 30 ? query.slice(0, 30) + '...' : query}"
               </p>
             </div>
           )}
@@ -252,11 +252,12 @@ export default function SearchModal() {
             const isSelected = i === selectedIndex
             const isCanvasResult = result.type === 'canvas'
             const isMoodboardResult = result.type === 'moodboard'
-            const ResultIcon = isCanvasResult ? PenTool : isMoodboardResult ? LayoutGrid : FileText
+            const isFlashcard = result.source === 'flashcard'
+            const ResultIcon = isFlashcard ? Zap : isCanvasResult ? PenTool : isMoodboardResult ? LayoutGrid : FileText
             return (
               <button
                 key={result.id}
-                onClick={() => { navigate(`/notes/${result.id}`); setOpen(false) }}
+                onClick={() => { navigate(result.source === 'flashcard' ? '/flashcards' : `/notes/${result.id}`); setOpen(false) }}
                 onMouseEnter={() => setSelectedIndex(i)}
                 className="w-full text-left px-3 py-2.5 rounded-[10px] flex items-start gap-3 group"
                 style={{
@@ -321,7 +322,7 @@ export default function SearchModal() {
                     className="text-xs truncate leading-relaxed"
                     style={{ color: dark ? '#505050' : '#999999' }}
                   >
-                    {isCanvasResult ? 'Canvas note' : isMoodboardResult ? 'Moodboard' : result.preview}
+                    {isFlashcard ? result.preview : isCanvasResult ? 'Canvas note' : isMoodboardResult ? 'Moodboard' : result.preview}
                   </p>
                   {result.tags.length > 0 && (
                     <div className="flex gap-1.5 mt-1.5">

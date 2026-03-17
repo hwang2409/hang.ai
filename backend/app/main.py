@@ -21,6 +21,7 @@ from app.file_annotations.router import router as file_annotations_router
 from app.studyplan.router import router as studyplan_router
 from app.dashboard.router import router as dashboard_router
 from app.lookups.router import router as lookups_router
+from app.quizzes.router import router as quizzes_router
 
 
 @asynccontextmanager
@@ -60,6 +61,7 @@ app.include_router(file_annotations_router, prefix="/file-annotations", tags=["f
 app.include_router(studyplan_router, prefix="/studyplan", tags=["studyplan"])
 app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(lookups_router, prefix="/lookups", tags=["lookups"])
+app.include_router(quizzes_router, prefix="/quizzes", tags=["quizzes"])
 
 
 @app.get("/health")

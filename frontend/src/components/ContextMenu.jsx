@@ -41,13 +41,8 @@ export default function ContextMenu({ x, y, items, onClose }) {
       className="fixed z-[100] context-menu-enter"
       style={{ left: adjusted.x, top: adjusted.y }}
     >
-      <div
-        className="min-w-[160px] rounded-lg border border-[#1c1c1c] overflow-hidden py-1 context-menu-stagger"
-        style={{
-          background: 'linear-gradient(180deg, #141414 0%, #0f0f0f 100%)',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,167,89,0.04), 0 1px 0 0 rgba(255,255,255,0.02) inset',
-        }}
-      >
+      <div className="min-w-[160px] rounded-lg border border-[#1c1c1c] overflow-hidden py-1 context-menu-stagger context-menu-surface">
+
         {items.map((item, i) => {
           if (item.separator) {
             return <div key={`sep-${i}`} className="my-1 mx-2 border-t border-[#1a1a1a]" />
@@ -115,10 +110,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
       </div>
 
       {/* Subtle ambient glow beneath */}
-      <div
-        className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(196,167,89,0.1) 0%, transparent 70%)' }}
-      />
+      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full pointer-events-none context-menu-glow" />
     </div>
   )
 }

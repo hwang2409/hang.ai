@@ -140,6 +140,42 @@ async def keyword_search(
     return scores
 
 
+async def keyword_search_flashcards(
+    db: AsyncSession, user_id: int, query: str
+) -> list[tuple[float, object]]:
+    """Search flashcards by keyword matching on front/back text."""
+    from app.flashcards.models import Flashcard
+
+    pattern = f"%{query}%"
+    result = await db.execute(
+        select(Flashcard).where(
+            Flashcard.user_id == user_id,
+            or_(
+                Flashcard.front.ilike(pattern),
+                Flashcard.back.ilike(pattern),
+            ),
+        )
+    )
+    cards = result.scalars().all()
+    scores: list[tuple[float, Flashcard]] = []
+
+    query_lower = query.lower()
+    for card in cards:
+        front_lower = (card.front or "").lower()
+        back_lower = (card.back or "").lower()
+
+        if query_lower in front_lower:
+            score = 0.8
+        elif query_lower in back_lower:
+            score = 0.6
+        else:
+            score = 0.4
+
+        scores.append((score, card))
+
+    return scores
+
+
 async def semantic_search(
     db: AsyncSession, user_id: int, query: str
 ) -> dict[int, tuple[float, Document]]:

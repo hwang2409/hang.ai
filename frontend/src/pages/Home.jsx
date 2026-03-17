@@ -1,11 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown, FileText, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import ContextMenu from '../components/ContextMenu'
 import ImportModal from '../components/ImportModal'
 import { useAuth } from '../contexts/AuthContext'
+
+const NOTE_TEMPLATES = [
+  { id: 'cornell', name: 'cornell notes', title: 'Cornell Notes', content: `## Cues / Questions\n\n- \n\n---\n\n## Notes\n\n\n\n---\n\n## Summary\n\n` },
+  { id: 'lecture', name: 'lecture notes', title: 'Lecture Notes', getContent: () => `## Topic\n\n**Date:** ${new Date().toLocaleDateString()}\n**Instructor:** \n\n---\n\n## Key Points\n\n1. \n\n## Details\n\n\n\n## Questions\n\n- \n\n## Action Items\n\n- [ ] ` },
+  { id: 'lab', name: 'lab report', title: 'Lab Report', content: `## Objective\n\n\n\n## Materials\n\n- \n\n## Procedure\n\n1. \n\n## Observations\n\n\n\n## Data\n\n| Trial | Measurement | Notes |\n|-------|-------------|-------|\n| 1 | | |\n| 2 | | |\n\n## Analysis\n\n\n\n## Conclusion\n\n` },
+  { id: 'study-guide', name: 'study guide', title: 'Study Guide', content: `## Topics to Cover\n\n- [ ] \n\n## Key Concepts\n\n### Concept 1\n\n**Definition:** \n\n**Key points:**\n- \n\n### Concept 2\n\n**Definition:** \n\n**Key points:**\n- \n\n## Formulas / Key Facts\n\n| Formula | Description |\n|---------|-------------|\n| | |\n\n## Practice Questions\n\n1. \n\n## Weak Areas\n\n- ` },
+]
 
 export default function Home() {
   const { user } = useAuth()
@@ -83,6 +90,20 @@ export default function Home() {
       navigate(`/notes/${note.id}`)
     } catch (err) {
       console.error('Failed to create note:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleNewFromTemplate = async (template) => {
+    setCreating(true)
+    setShowCreateMenu(false)
+    try {
+      const content = template.getContent ? template.getContent() : template.content
+      const note = await api.post('/notes', { title: template.title, content })
+      navigate(`/notes/${note.id}`)
+    } catch (err) {
+      console.error('Failed to create note from template:', err)
     } finally {
       setCreating(false)
     }
@@ -277,6 +298,13 @@ export default function Home() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-semibold text-text tracking-tight">notes</h1>
           <div className="flex items-center gap-2">
+            <button
+                onClick={() => api.download('/notes/export/markdown-zip')}
+                className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
+                title="Export all notes as zip"
+            >
+                <Download size={16} />
+            </button>
             {/* Create dropdown (import, canvas, moodboard) */}
             <div className="relative" ref={createMenuRef}>
               <button
@@ -312,6 +340,19 @@ export default function Home() {
                     <LayoutGrid size={14} />
                     new moodboard
                   </button>
+                  <div className="border-t border-[#1c1c1c] my-1 mx-3" />
+                  <p className="px-3 pt-1 pb-0.5 text-[9px] uppercase tracking-wider text-[#444]">templates</p>
+                  {NOTE_TEMPLATES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleNewFromTemplate(t)}
+                      disabled={creating}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-[#999] hover:text-[#d4d4d4] hover:bg-[#161616] transition-colors disabled:opacity-50"
+                    >
+                      <FileText size={14} />
+                      {t.name}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

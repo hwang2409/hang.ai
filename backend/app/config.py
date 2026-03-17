@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     CLAUDE_MODEL: str = "claude-sonnet-4-6"
     SEARXNG_URL: str = "http://localhost:8888"
+    OPENAI_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 

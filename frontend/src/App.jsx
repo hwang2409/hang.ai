@@ -18,6 +18,8 @@ import Library from './pages/Library'
 import FileView from './pages/FileView'
 import StudyPlan from './pages/StudyPlan'
 import KnowledgeGraph from './pages/KnowledgeGraph'
+import Quizzes from './pages/Quizzes'
+import QuizTake from './pages/QuizTake'
 import Wiki from './pages/Wiki'
 import Settings from './pages/Settings'
 
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="/flashcards" element={<PrivateRoute><Flashcards /></PrivateRoute>} />
         <Route path="/flashcards/study" element={<PrivateRoute><FlashcardStudy /></PrivateRoute>} />
         <Route path="/feynman" element={<PrivateRoute><Feynman /></PrivateRoute>} />
+        <Route path="/quizzes" element={<PrivateRoute><Quizzes /></PrivateRoute>} />
+        <Route path="/quizzes/take/:id" element={<PrivateRoute><QuizTake /></PrivateRoute>} />
         <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
         <Route path="/pomodoro" element={<PrivateRoute><Pomodoro /></PrivateRoute>} />
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

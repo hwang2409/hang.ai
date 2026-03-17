@@ -21,6 +21,7 @@ export default defineConfig({
       '/files': 'http://localhost:8000',
       '/file-annotations': 'http://localhost:8000',
       '/lookups': 'http://localhost:8000',
+      '/quizzes': 'http://localhost:8000',
     }
   }
 })

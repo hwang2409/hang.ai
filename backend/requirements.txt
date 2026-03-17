@@ -13,3 +13,7 @@ httpx
 PyPDF2
 python-pptx
 youtube-transcript-api
+markdown
+xhtml2pdf
+genanki
+openai

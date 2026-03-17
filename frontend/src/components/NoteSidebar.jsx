@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, X, Trash2, AlertTriangle, ExternalLink, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
@@ -283,6 +283,15 @@ const LookupCard = ({ lookup, expanded, onToggle, onDelete, dark }) => (
   </div>
 )
 
+const OutlineItem = ({ item }) => (
+    <div style={{ paddingLeft: `${((item.level || 1) - 1) * 10}px` }}>
+        <p className="text-[11px] text-[#d4d4d4] leading-relaxed">{item.text}</p>
+        {item.children?.map((child, i) => (
+            <OutlineItem key={i} item={child} />
+        ))}
+    </div>
+)
+
 export default function NoteSidebar({
   sidebarTab, setSidebarTab,
   // Chat props
@@ -307,6 +316,57 @@ export default function NoteSidebar({
 }) {
   const chatScrollRef = useRef(null)
   const chatEndRef = useRef(null)
+
+  // Cheat sheet state
+  const [cheatsheet, setCheatsheet] = useState(null)
+  const [cheatsheetLoading, setCheatsheetLoading] = useState(false)
+
+  // Outline state
+  const [outline, setOutline] = useState(null)
+  const [outlineLoading, setOutlineLoading] = useState(false)
+
+  const handleGenerateOutline = async () => {
+    setOutlineLoading(true)
+    try {
+      const data = await api.post(`/notes/${noteId}/outline`)
+      setOutline(data)
+    } catch (err) {
+      console.error('Failed to generate outline:', err)
+    } finally {
+      setOutlineLoading(false)
+    }
+  }
+
+  // Auto-TOC from markdown content
+  const tocItems = useMemo(() => {
+    if (!content) return []
+    const lines = content.split('\n')
+    const items = []
+    for (const line of lines) {
+      const match = line.match(/^(#{1,4})\s+(.+)/)
+      if (match) {
+        items.push({
+          level: match[1].length,
+          text: match[2].replace(/[*_`~]/g, '').trim(),
+          id: match[2].replace(/[*_`~]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        })
+      }
+    }
+    return items
+  }, [content])
+
+  const handleGenerateCheatsheet = async () => {
+    if (!noteId || cheatsheetLoading) return
+    setCheatsheetLoading(true)
+    try {
+      const result = await api.post(`/notes/${noteId}/cheatsheet`)
+      setCheatsheet(result)
+    } catch (err) {
+      console.error('Failed to generate cheat sheet:', err)
+    } finally {
+      setCheatsheetLoading(false)
+    }
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden border-l border-[#1c1c1c] bg-[#0e0e0e]">
@@ -545,6 +605,34 @@ export default function NoteSidebar({
             <EmptyState>insights will appear here after<br />you save some content.</EmptyState>
           ) : (
             <>
+              {/* Table of Contents */}
+              {tocItems.length > 0 && (
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-[#444444] block mb-2">table of contents</span>
+                  <div className="space-y-0.5">
+                    {tocItems.map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          // Scroll to heading in the note
+                          const headings = document.querySelectorAll('h1, h2, h3, h4')
+                          for (const h of headings) {
+                            if (h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') === item.id) {
+                              h.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                              break
+                            }
+                          }
+                        }}
+                        className="block w-full text-left text-[11px] text-[#808080] hover:text-[#d4d4d4] transition-colors truncate"
+                        style={{ paddingLeft: `${(item.level - 1) * 12}px` }}
+                      >
+                        {item.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Summary */}
               {insights.summary && (
                 <div>
@@ -652,6 +740,132 @@ export default function NoteSidebar({
                   </div>
                 </div>
               )}
+
+              {/* Cheat Sheet */}
+              <div className="border-t border-[#1c1c1c] pt-3 mt-1">
+                {!cheatsheet ? (
+                  <button
+                    onClick={handleGenerateCheatsheet}
+                    disabled={cheatsheetLoading}
+                    className="flex items-center gap-2 text-[11px] px-3 py-1.5 rounded-md bg-[#191919] border border-[#1c1c1c] text-[#808080] hover:text-[#d4d4d4] hover:border-[#2a2a2a] transition-colors disabled:opacity-50 w-full justify-center"
+                  >
+                    {cheatsheetLoading ? (
+                      <>
+                        <div className="animate-spin h-3 w-3 border border-[#606060] border-t-transparent rounded-full" />
+                        generating cheat sheet...
+                      </>
+                    ) : (
+                      '+ generate cheat sheet'
+                    )}
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-[#444444]">cheat sheet</span>
+                      <button
+                        onClick={() => setCheatsheet(null)}
+                        className="text-[9px] text-[#444] hover:text-[#808080] transition-colors"
+                      >
+                        clear
+                      </button>
+                    </div>
+
+                    {/* Sections */}
+                    {cheatsheet.sections?.map((s, i) => (
+                      <div key={i}>
+                        <p className="text-[11px] font-medium text-[#d4d4d4] mb-1">{s.heading}</p>
+                        <ul className="space-y-0.5 pl-3">
+                          {s.points?.map((pt, j) => (
+                            <li key={j} className="text-[11px] text-[#808080] leading-relaxed list-disc">{pt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    {/* Key Facts */}
+                    {cheatsheet.key_facts?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-[#444444] mb-1.5">key facts</p>
+                        <ul className="space-y-0.5 pl-3">
+                          {cheatsheet.key_facts.map((f, i) => (
+                            <li key={i} className="text-[11px] text-[#808080] leading-relaxed list-disc">{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Formulas */}
+                    {cheatsheet.formulas?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-[#444444] mb-1.5">formulas</p>
+                        <div className="space-y-1.5">
+                          {cheatsheet.formulas.map((f, i) => (
+                            <div key={i} className="bg-[#111111] border border-[#1c1c1c] rounded-md p-2">
+                              <MarkdownRenderer content={`$${f.latex}$`} />
+                              <p className="text-[10px] text-[#606060] mt-0.5">{f.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mnemonics */}
+                    {cheatsheet.mnemonics?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-[#444444] mb-1.5">memory aids</p>
+                        {cheatsheet.mnemonics.map((m, i) => (
+                          <p key={i} className="text-[11px] text-[#c4a759] leading-relaxed pl-2 border-l-2 border-[#2a2211] mb-1">{m}</p>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Common Mistakes */}
+                    {cheatsheet.common_mistakes?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-[#444444] mb-1.5">common mistakes</p>
+                        {cheatsheet.common_mistakes.map((m, i) => (
+                          <p key={i} className="text-[11px] text-[#ef4444] leading-relaxed pl-2 border-l-2 border-[rgba(239,68,68,0.2)] mb-1">{m}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* AI Outline */}
+              <div className="border-t border-[#1c1c1c] pt-3 mt-1">
+                {!outline ? (
+                  <button
+                    onClick={handleGenerateOutline}
+                    disabled={outlineLoading}
+                    className="flex items-center gap-2 text-[11px] px-3 py-1.5 rounded-md bg-[#191919] border border-[#1c1c1c] text-[#808080] hover:text-[#d4d4d4] hover:border-[#2a2a2a] transition-colors disabled:opacity-50 w-full justify-center"
+                  >
+                    {outlineLoading ? (
+                      <>
+                        <div className="animate-spin h-3 w-3 border border-[#606060] border-t-transparent rounded-full" />
+                        generating outline...
+                      </>
+                    ) : (
+                      '+ generate outline'
+                    )}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-[#444444]">outline</span>
+                      <button
+                        onClick={() => setOutline(null)}
+                        className="text-[9px] text-[#444] hover:text-[#808080] transition-colors"
+                      >
+                        clear
+                      </button>
+                    </div>
+                    {outline.items?.map((item, i) => (
+                      <OutlineItem key={i} item={item} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

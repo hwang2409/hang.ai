@@ -14,6 +14,7 @@ class FileResponse(BaseModel):
     has_extracted_text: bool = False
     metadata: Optional[dict] = None
     source_url: Optional[str] = None
+    transcription_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

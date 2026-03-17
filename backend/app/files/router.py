@@ -4,7 +4,7 @@ import os
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, UploadFile, File
 from jose import JWTError, jwt as jose_jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.auth.models import User
 from app.files.models import UploadedFile
 from app.files.schemas import FileResponse
 from pydantic import BaseModel
+from app.files.transcription import transcribe_audio_background
 from app.imports.extractors import (
     extract_pdf_text, extract_pptx_text,
     detect_url_type, extract_arxiv_content, extract_webpage_content,
@@ -75,7 +76,7 @@ def _file_to_response(f: UploadedFile) -> dict:
             metadata = json.loads(f.metadata_json)
         except Exception:
             pass
-    return {
+    resp = {
         "id": f.id,
         "original_name": f.original_name,
         "file_type": f.file_type,
@@ -88,10 +89,14 @@ def _file_to_response(f: UploadedFile) -> dict:
         "created_at": f.created_at,
         "updated_at": f.updated_at,
     }
+    if f.file_type == "audio":
+        resp["transcription_status"] = "complete" if f.extracted_text else "pending"
+    return resp
 
 
 @router.post("", response_model=FileResponse, status_code=201)
 async def upload_file_endpoint(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     folder_id: Optional[int] = Form(None),
     db: AsyncSession = Depends(get_db),
@@ -111,6 +116,11 @@ async def upload_file_endpoint(
 
     file_type = EXTENSION_TYPE_MAP[ext]
     mime_type = MIME_MAP.get(ext, file.content_type or "application/octet-stream")
+
+    # Browser MediaRecorder produces audio/webm — override video classification
+    if ext == ".webm" and file.content_type and "audio" in file.content_type:
+        file_type = "audio"
+        mime_type = "audio/webm"
 
     # Save to disk
     uuid_name = f"{uuid.uuid4().hex}{ext}"
@@ -159,6 +169,10 @@ async def upload_file_endpoint(
     db.add(record)
     await db.commit()
     await db.refresh(record)
+
+    # Trigger background transcription for audio files
+    if file_type == "audio":
+        background_tasks.add_task(transcribe_audio_background, record.id, file_path)
 
     return _file_to_response(record)
 
@@ -307,6 +321,38 @@ async def delete_file(
         raise HTTPException(404, "File not found")
     f.deleted = True
     await db.commit()
+
+
+@router.post("/{file_id}/transcribe")
+async def transcribe_file(
+    file_id: int,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually trigger transcription for an audio file."""
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(400, "Transcription unavailable: OPENAI_API_KEY not configured")
+
+    result = await db.execute(
+        select(UploadedFile).where(
+            UploadedFile.id == file_id,
+            UploadedFile.user_id == current_user.id,
+            UploadedFile.deleted == False,
+        )
+    )
+    f = result.scalar_one_or_none()
+    if not f:
+        raise HTTPException(404, "File not found")
+    if f.file_type != "audio":
+        raise HTTPException(400, "Only audio files can be transcribed")
+
+    abs_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        f.file_path,
+    )
+    background_tasks.add_task(transcribe_audio_background, f.id, abs_path)
+    return {"status": "transcribing"}
 
 
 class ImportUrlRequest(BaseModel):

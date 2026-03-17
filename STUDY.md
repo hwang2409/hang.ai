@@ -33,6 +33,7 @@ Most notes apps only store information. The best one should help users:
 | Responsive (desktop + mobile sidebar) | ✅ |
 | Vim mode with full keybindings | ✅ |
 | Wiki/help page for discoverability | ✅ |
+| Note templates (Cornell, lecture, lab report) | ✅ |
 
 ---
 
@@ -49,9 +50,8 @@ Most notes apps only store information. The best one should help users:
 | Audio file upload | ✅ |
 | URL/link import (YouTube, arXiv, web) | ✅ |
 | Drag-and-drop file upload | ✅ |
+| In-app voice recording + transcription | ✅ |
 | Screenshot capture | ⬜ |
-| Handwriting input | ⬜ |
-| In-app voice recording + transcription | ⬜ |
 
 ---
 
@@ -65,8 +65,9 @@ Most notes apps only store information. The best one should help users:
 | Auto-generate summary | ✅ (insights tab) |
 | Suggest tags from content | ✅ (insights tab) |
 | Detect prerequisites / concept dependencies | ✅ (insights tab) |
+| Auto-generate table of contents for long notes | ✅ |
 | Auto-detect topics across all notes | ⬜ |
-| Identify "important material" vs filler | ⬜ |
+| Smart note connections ("this note mentions X — see also Note Y") | ⬜ |
 
 ---
 
@@ -78,14 +79,15 @@ Most notes apps only store information. The best one should help users:
 | AI-generated flashcards from notes | ✅ (with duplicate detection) |
 | One-click flashcard from extracted definitions | ✅ (insights tab) |
 | AI study plan from syllabus | ✅ |
-| Quizzes (multiple choice, fill-blank, true/false) | ⬜ |
-| Cheat sheet generation | ⬜ |
-| Auto-generated concept maps from content | ⬜ |
-| Study guide compilation across notes | ⬜ |
+| Quizzes (multiple choice, fill-blank, true/false) | ✅ |
+| Cheat sheet / reference card generation | ✅ |
+| Practice problem generation (open-ended with step checking) | ⬜ |
+| Outline generation from long notes | ✅ |
+| Study guide compilation across multiple notes | ⬜ |
 
 ---
 
-### 5. Built-In Retention (Pillar 5 — Remember What You Learned)
+### 5. Built-In Retention (Pillar 4 — Remember What You Learned)
 
 | Feature | Status |
 |---------|--------|
@@ -95,12 +97,14 @@ Most notes apps only store information. The best one should help users:
 | Mastery tracking (mastered vs learning) | ✅ |
 | Flashcard stats dashboard | ✅ |
 | Keyboard-driven study (Space, 1-4) | ✅ |
-| Review scheduling / smart reminders | ⬜ (dashboard shows due, but no push notifications) |
-| Adaptive review timing (beyond SM2) | ⬜ |
+| Quiz attempt history + score tracking | ✅ |
+| Spaced repetition for quizzes (re-serve weak-topic quizzes at intervals) | ⬜ |
+| Interleaved practice (mix topics in review sessions) | ⬜ |
+| Forgetting curve visualization per topic | ⬜ |
 
 ---
 
-### 6. Real Learning Support (Pillar 4 — Actually Understand)
+### 6. Real Learning Support (Pillar 5 — Actually Understand)
 
 | Feature | Status |
 |---------|--------|
@@ -109,9 +113,10 @@ Most notes apps only store information. The best one should help users:
 | Research topics in depth (selection action) | ✅ |
 | Summarize passages (selection action) | ✅ |
 | Feynman technique with AI scoring | ✅ |
-| Generate examples | 🟡 (via chat, no dedicated UI) |
-| Compare similar ideas side-by-side | ⬜ |
-| Step-by-step problem walkthrough UI | ⬜ (chat can do it, no structured UI) |
+| Saved lookup results per note | ✅ (lookups module) |
+| Socratic dialogue mode (AI probes your understanding) | ⬜ |
+| Step-by-step problem walkthrough UI | ⬜ |
+| Error pattern analysis (you keep getting X wrong — here's why) | ⬜ |
 
 ---
 
@@ -121,12 +126,13 @@ Most notes apps only store information. The best one should help users:
 |---------|--------|
 | Wiki links ([[Note Title]]) | ✅ |
 | Bidirectional links (sidebar links tab) | ✅ |
-| Wiki link autocomplete in Vim editor | ✅ |
+| Wiki link autocomplete in editor | ✅ |
 | Knowledge graph visualization | ✅ |
 | Auto-sync wiki links to DocumentLinks on save | ✅ |
 | Concept dependencies (insights tab) | ✅ |
 | Auto-generated concept maps | ⬜ |
 | Cross-note concept clustering | ⬜ |
+| Auto-link terms to their definition notes | ⬜ |
 
 ---
 
@@ -138,13 +144,24 @@ Most notes apps only store information. The best one should help users:
 | Global Cmd+K search | ✅ |
 | Note search with debouncing | ✅ |
 | Recency-boosted ranking | ✅ |
-| Find where a concept was explained | 🟡 (semantic search covers this partially) |
-| Find prerequisite topics | ⬜ |
-| Cross-context search (notes + flashcards + files) | ⬜ |
+| Cross-context search (notes + flashcards + files) | ✅ |
 
 ---
 
-### 9. Action-Oriented Workflow (Notes → Doing)
+### 9. Annotations & Highlighting
+
+| Feature | Status |
+|---------|--------|
+| Note text highlights with colors | ✅ |
+| Note annotation comments | ✅ |
+| PDF page annotations | ✅ |
+| Video timestamp annotations | ✅ |
+| Selection toolbar (annotate, research, chat) | ✅ |
+| Annotation summary / export | ✅ |
+
+---
+
+### 10. Action-Oriented Workflow (Notes → Doing)
 
 | Feature | Status |
 |---------|--------|
@@ -154,25 +171,44 @@ Most notes apps only store information. The best one should help users:
 | Study plan → auto-created todos | ✅ |
 | Activity heatmap (365-day) | ✅ |
 | Dashboard with daily review | ✅ |
-| Push notifications / reminders | ⬜ |
+| Daily study brief ("here's your plan for today") | ✅ |
+| "Study this next" recommendations based on weak areas + deadlines | ✅ |
 | Calendar integration | ⬜ |
 
 ---
 
-### 10. Study Mode + Work Mode
+### 11. Study & Exam Modes
 
 | Feature | Status |
 |---------|--------|
-| Flashcard study mode | ✅ |
+| Flashcard study mode (flip + rate) | ✅ |
+| Quiz mode with instant feedback | ✅ |
+| Timed quiz with results + review | ✅ |
 | Feynman exam prep | ✅ |
 | Concept review (insights tab) | ✅ |
-| Notes + todos + Pomodoro (work mode) | ✅ |
-| Quizzes / practice exams | ⬜ |
-| Timed exam simulation | ⬜ |
+| Timed exam simulation (multi-quiz, strict timer, no feedback until end) | ⬜ |
+| Socratic mode (AI interrogates your knowledge) | ⬜ |
 
 ---
 
-### 11. Strong STEM Support
+### 12. Analytics & Progress Tracking
+
+| Feature | Status |
+|---------|--------|
+| Pomodoro stats (today/week/total, streak) | ✅ |
+| Flashcard stats (total, due, mastered, learning) | ✅ |
+| Quiz stats (attempts, avg score, best score) | ✅ |
+| Weak topic detection (flashcard ease + Feynman scores) | ✅ |
+| Stale note detection | ✅ |
+| Activity heatmap | ✅ |
+| Performance trends over time (weekly accuracy chart) | ✅ |
+| Topic mastery visualization (strong vs weak subjects) | ⬜ |
+| Study time analytics (hours/week, trending) | ⬜ |
+| Predicted exam readiness score | ⬜ |
+
+---
+
+### 13. Strong STEM Support
 
 | Feature | Status |
 |---------|--------|
@@ -181,22 +217,36 @@ Most notes apps only store information. The best one should help users:
 | Tables (GitHub-flavored markdown) | ✅ |
 | Diagrams (Excalidraw canvas) | ✅ |
 | Formula extraction (insights tab) | ✅ |
+| Code execution in notes (run Python/JS inline) | ⬜ |
 | Handwritten math recognition (OCR) | ⬜ |
-| Step-by-step solutions UI | ⬜ |
 
 ---
 
-### 12. Personalization (Adapts to You)
+### 14. Export & Portability
+
+| Feature | Status |
+|---------|--------|
+| File upload (PDF, image, video, audio) | ✅ |
+| URL import (YouTube, arXiv, web) | ✅ |
+| Export notes as PDF | ✅ |
+| Export flashcard deck (Anki format) | ✅ |
+| Export all notes as markdown zip | ✅ |
+| Import from Notion / Obsidian | ⬜ |
+| Share note via public read-only link | ⬜ |
+
+---
+
+### 15. Personalization (Adapts to You)
 
 | Feature | Status |
 |---------|--------|
 | Weak area detection (flashcard ease scores) | ✅ |
 | Weak Feynman topics (low scores surface on dashboard) | ✅ |
 | Stale note detection (dashboard) | ✅ |
-| Persistent preferences (vim mode, theme) | ✅ |
-| Preferred explanation style detection | ⬜ |
-| Adaptive review scheduling | ⬜ |
+| Persistent preferences (vim mode, theme, font size, note type) | ✅ |
+| Configurable Pomodoro durations | ✅ |
 | Study habit analysis / recommendations | ⬜ |
+| Adaptive review scheduling (beyond SM2) | ⬜ |
 
 ---
 
@@ -204,30 +254,35 @@ Most notes apps only store information. The best one should help users:
 
 | Pillar | Coverage |
 |--------|----------|
-| Clean UX | **7/7** ✅ |
-| Frictionless Capture | **9/12** (missing: screenshot, handwriting, voice recording) |
-| Automatic Understanding | **6/8** (missing: cross-note topics, importance detection) |
-| Note Transformation | **4/8** (missing: quizzes, cheat sheets, concept maps, study guides) |
-| Built-In Retention | **6/8** (missing: push reminders, adaptive timing) |
-| Real Learning Support | **5/8** (missing: compare ideas, step-by-step UI, examples UI) |
-| Knowledge Connections | **6/8** (missing: auto concept maps, cross-note clustering) |
-| Smart Search | **4/7** (missing: prerequisite search, cross-context) |
-| Action-Oriented Workflow | **6/8** (missing: push notifications, calendar) |
-| Study + Work Modes | **4/6** (missing: quizzes, exam simulation) |
-| STEM Support | **5/7** (missing: handwriting OCR, step-by-step UI) |
-| Personalization | **4/7** (missing: explanation style, adaptive scheduling, habit analysis) |
+| Clean UX | **8/8** |
+| Frictionless Capture | **10/11** (missing: screenshot) |
+| Automatic Understanding | **7/9** (missing: cross-note topics, smart connections) |
+| Note Transformation | **7/9** (missing: practice problems, study guides) |
+| Built-In Retention | **7/10** (missing: quiz SR, interleaved practice, forgetting curves) |
+| Real Learning Support | **6/9** (missing: socratic mode, step-by-step UI, error analysis) |
+| Knowledge Connections | **6/9** (missing: concept maps, clustering, auto-linking) |
+| Smart Search | **5/5** |
+| Annotations | **6/6** |
+| Action Workflow | **8/9** (missing: calendar) |
+| Study & Exam Modes | **5/7** (missing: exam simulation, socratic mode) |
+| Analytics | **7/10** (missing: mastery viz, study time, readiness) |
+| STEM Support | **5/7** (missing: code execution, handwriting OCR) |
+| Export & Portability | **5/7** (missing: import, sharing) |
+| Personalization | **5/7** (missing: habit analysis, adaptive scheduling) |
 
-**Overall: ~66/91 features implemented (~73%)**
+**Overall: ~101/122 features implemented (~83%)**
+
+---
 
 ## Biggest Gaps (Priority Order)
 
-1. **Quizzes** — multiple choice, fill-blank, true/false from notes. Flashcards alone aren't enough for exam prep.
-2. **Voice recording + transcription** — critical for lecture capture. Currently audio files can be uploaded but not recorded in-app.
-3. **Cheat sheet / study guide generation** — natural extension of existing AI summarization.
-4. **Push notifications / reminders** — dashboard shows what's due, but nothing proactive.
-5. **Concept comparison** — side-by-side view for comparing similar topics.
-6. **Handwriting recognition** — canvas exists but no OCR for handwritten math/text.
-7. **Auto-generated concept maps** — knowledge graph exists, but needs AI layer to auto-suggest connections.
-8. **Timed exam simulation** — quiz mode with a timer and scoring.
-9. **Adaptive personalization** — learn study patterns and adjust recommendations.
-10. **Cross-context search** — unified search across notes, flashcards, files, and annotations.
+1. **Daily study brief / "study this next"** — Dashboard shows data but doesn't *tell you what to do*. A single "here's your plan for today" screen transforms passive into active.
+2. **Export (PDF + Anki)** — Without export, users feel locked in. Anki export alone is a huge draw for med/law students.
+3. **Performance trends** — "Am I getting better?" Simple line chart of weekly quiz accuracy + flashcard retention rate.
+4. **Cheat sheet / study guide generation** — Natural extension of existing AI summarization. High-value, low-effort.
+5. ~~**Voice recording + transcription**~~ ✅ — Implemented: in-app recording, audio playback, Whisper transcription.
+6. **Practice problem generation** — Goes beyond quizzes. "Solve this integral" with step-by-step validation.
+7. **Socratic dialogue mode** — AI probes your understanding. More rigorous than Feynman (where you choose what to explain).
+8. **Cross-context search** — Unified search across notes, flashcards, files, and annotations.
+9. **Note templates** — Low effort, high value. Cornell notes template alone attracts study-focused users.
+10. **Shareable links** — Even read-only note sharing unlocks study group use cases.

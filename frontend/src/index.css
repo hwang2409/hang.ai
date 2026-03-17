@@ -368,6 +368,27 @@ html.light .wiki-ref { color: #6965db; border-bottom-color: rgba(105,101,219,0.3
 .context-menu-stagger > *:nth-child(6) { animation-delay: 145ms; }
 .context-menu-stagger > *:nth-child(7) { animation-delay: 170ms; }
 
+/* Context menu surface — dark */
+.context-menu-surface {
+  background: linear-gradient(180deg, #141414 0%, #0f0f0f 100%);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,167,89,0.04), 0 1px 0 0 rgba(255,255,255,0.02) inset;
+}
+.context-menu-glow {
+  background: radial-gradient(ellipse, rgba(196,167,89,0.1) 0%, transparent 70%);
+}
+
+/* Context menu surface — light */
+html.light .context-menu-surface {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f5f0 100%);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04), 0 1px 0 0 rgba(255,255,255,0.6) inset;
+}
+html.light .context-menu-glow {
+  background: radial-gradient(ellipse, rgba(0,0,0,0.03) 0%, transparent 70%);
+}
+html.light .context-menu-stagger button:hover { background: rgba(180,150,60,0.05) !important; }
+html.light .context-menu-stagger .bg-\[rgba\(136\,68\,68\,0\.15\)\] { background: rgba(180,60,60,0.06) !important; }
+html.light .context-menu-stagger .bg-\[rgba\(136\,68\,68\,0\.08\)\] { background: rgba(180,60,60,0.04) !important; }
+
 /* ── theme toggle button ───────────────────────────────────────── */
 
 .theme-toggle-btn {

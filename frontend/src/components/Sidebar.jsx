@@ -17,6 +17,7 @@ export default function Sidebar() {
   const studyItems = [
     { to: '/flashcards', label: 'flashcards' },
     { to: '/feynman', label: 'feynman' },
+    { to: '/quizzes', label: 'quizzes' },
     { to: '/pomodoro', label: 'pomodoro' },
     { to: '/todos', label: 'todos' },
     { to: '/studyplan', label: 'study plan' },

@@ -1,15 +1,18 @@
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from starlette.responses import FileResponse
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.notes.models import Document
-from app.flashcards.models import Flashcard
+from app.flashcards.models import Flashcard, FlashcardReview
 from app.flashcards.schemas import (
     DuplicateInfo,
     FlashcardCreate,
@@ -189,6 +192,94 @@ async def get_weak_spots(
     return WeakSpotsResponse(groups=groups, total=len(weak_cards))
 
 
+# ── Anki Export ────────────────────────────────────────────────────────────
+
+_ANKI_MODEL_ID = 1607392319
+_ANKI_DECK_BASE_ID = 2059400110
+
+
+@router.get("/export/anki")
+async def export_anki(
+    background_tasks: BackgroundTasks,
+    token: str = Query(...),
+    note_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export flashcards as an Anki .apkg file."""
+    from jose import JWTError, jwt as jose_jwt
+    from app.config import settings
+    try:
+        payload = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = int(payload.get("sub", 0))
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    import genanki
+    import markdown as md
+
+    stmt = select(Flashcard).where(Flashcard.user_id == user_id)
+    if note_id is not None:
+        stmt = stmt.where(Flashcard.note_id == note_id)
+    stmt = stmt.order_by(Flashcard.created_at.desc())
+    result = await db.execute(stmt)
+    cards = list(result.scalars().all())
+
+    if not cards:
+        raise HTTPException(status_code=404, detail="No flashcards to export")
+
+    # Determine deck name
+    deck_name = "Hang.ai Flashcards"
+    deck_id = _ANKI_DECK_BASE_ID + user_id
+    if note_id is not None:
+        note_result = await db.execute(
+            select(Document).where(Document.id == note_id, Document.user_id == user_id)
+        )
+        note = note_result.scalar_one_or_none()
+        if note and note.title:
+            deck_name = f"Hang.ai — {note.title}"
+        deck_id = _ANKI_DECK_BASE_ID + note_id
+
+    model = genanki.Model(
+        _ANKI_MODEL_ID,
+        "Hang.ai Flashcard",
+        fields=[{"name": "Front"}, {"name": "Back"}],
+        templates=[{
+            "name": "Card 1",
+            "qfmt": "{{Front}}",
+            "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
+        }],
+    )
+
+    deck = genanki.Deck(deck_id, deck_name)
+
+    for card in cards:
+        front_html = md.markdown(card.front or "", extensions=["tables", "fenced_code"])
+        back_html = md.markdown(card.back or "", extensions=["tables", "fenced_code"])
+        note = genanki.Note(model=model, fields=[front_html, back_html])
+        deck.add_note(note)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
+    tmp.close()
+    try:
+        genanki.Package(deck).write_to_file(tmp.name)
+    except Exception:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail="Anki export failed")
+
+    safe_name = deck_name.replace(" ", "_").replace("—", "-")[:60]
+    filename = f"{safe_name}.apkg"
+
+    background_tasks.add_task(os.unlink, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.put("/{card_id}", response_model=FlashcardResponse)
 async def update_flashcard(
     card_id: int,
@@ -254,6 +345,7 @@ async def review_flashcard(
         raise HTTPException(status_code=404, detail="Flashcard not found")
 
     apply_sm2(card, body.quality)
+    db.add(FlashcardReview(card_id=card_id, user_id=current_user.id, quality=body.quality))
     await db.commit()
     await db.refresh(card)
     return card

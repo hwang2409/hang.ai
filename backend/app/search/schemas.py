@@ -14,6 +14,7 @@ class SearchResultItem(BaseModel):
     title: str
     preview: str
     type: str = "text"
+    source: str = "note"  # "note" | "flashcard"
     tags: list[dict] = []
     match_type: str  # "keyword" | "semantic" | "both"
     score: float

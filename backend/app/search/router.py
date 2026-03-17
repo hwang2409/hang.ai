@@ -33,11 +33,32 @@ async def search_hybrid(
             title=doc.title or "Untitled",
             preview=(doc.content or "")[:120] if doc.type != "canvas" else "",
             type=doc.type,
+            source="note",
             tags=[TagResponse.model_validate(t).model_dump() for t in doc.tags],
             match_type=match_type,
             score=round(score, 4),
             updated_at=doc.updated_at,
         ))
+
+    # Also search flashcards
+    from app.search.service import keyword_search_flashcards
+    fc_results = await keyword_search_flashcards(db, current_user.id, body.query)
+    for score, card in fc_results:
+        items.append(SearchResultItem(
+            id=card.id,
+            title=card.front[:80] if card.front else "Flashcard",
+            preview=card.back[:120] if card.back else "",
+            type="flashcard",
+            source="flashcard",
+            tags=[],
+            match_type="keyword",
+            score=round(score, 4),
+            updated_at=card.updated_at,
+        ))
+
+    # Sort all items by score descending
+    items.sort(key=lambda x: x.score, reverse=True)
+    items = items[:body.limit]
 
     return HybridSearchResponse(results=items, query=body.query)
 
