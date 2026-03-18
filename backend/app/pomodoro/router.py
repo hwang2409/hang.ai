@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.pomodoro.models import StudySession
-from app.pomodoro.schemas import CreateSessionRequest, SessionResponse, StatsResponse
+from app.pomodoro.schemas import CreateSessionRequest, SessionResponse, StatsResponse, AnalyticsResponse, WeeklyHours
 
 router = APIRouter()
 
@@ -142,4 +142,85 @@ async def get_stats(
         current_streak=streak,
         total_sessions=total_sessions,
         total_focus_minutes=total_minutes,
+    )
+
+
+@router.get("/analytics", response_model=AnalyticsResponse)
+async def get_analytics(
+    weeks: int = Query(12, ge=4, le=52),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    now = datetime.now(timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Start of current week (Monday)
+    current_week_start = today - timedelta(days=today.weekday())
+    earliest = current_week_start - timedelta(weeks=weeks - 1)
+
+    # Fetch all focus sessions in the range
+    result = await db.execute(
+        select(StudySession).where(
+            StudySession.user_id == current_user.id,
+            StudySession.session_type == "focus",
+            StudySession.completed == True,  # noqa: E712
+            StudySession.started_at >= earliest,
+        )
+    )
+    sessions = result.scalars().all()
+
+    # Bucket by week
+    week_data: dict[str, dict] = {}
+    for i in range(weeks):
+        ws = current_week_start - timedelta(weeks=weeks - 1 - i)
+        key = ws.strftime("%Y-%m-%d")
+        week_data[key] = {"minutes": 0, "sessions": 0}
+
+    for s in sessions:
+        started = s.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        week_start = started - timedelta(days=started.weekday())
+        key = week_start.strftime("%Y-%m-%d")
+        if key in week_data:
+            week_data[key]["minutes"] += s.duration_minutes
+            week_data[key]["sessions"] += 1
+
+    weekly_hours = [
+        WeeklyHours(
+            week=key,
+            hours=round(data["minutes"] / 60, 1),
+            sessions=data["sessions"],
+        )
+        for key, data in week_data.items()
+    ]
+
+    hours_values = [w.hours for w in weekly_hours]
+    total_hours = round(sum(hours_values), 1)
+    non_zero = [h for h in hours_values if h > 0]
+    avg_hours = round(sum(non_zero) / len(non_zero), 1) if non_zero else 0.0
+    best_week = max(hours_values) if hours_values else 0.0
+
+    # Trend: compare last 4 weeks avg to previous 4 weeks avg
+    if len(hours_values) >= 8:
+        recent_avg = sum(hours_values[-4:]) / 4
+        previous_avg = sum(hours_values[-8:-4]) / 4
+        if previous_avg == 0:
+            trend = "increasing" if recent_avg > 0 else "stable"
+        else:
+            change = (recent_avg - previous_avg) / previous_avg
+            if change > 0.1:
+                trend = "increasing"
+            elif change < -0.1:
+                trend = "decreasing"
+            else:
+                trend = "stable"
+    else:
+        trend = "stable"
+
+    return AnalyticsResponse(
+        weekly_hours=weekly_hours,
+        avg_hours_per_week=avg_hours,
+        total_hours=total_hours,
+        best_week_hours=best_week,
+        trend=trend,
     )

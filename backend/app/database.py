@@ -103,3 +103,9 @@ async def init_db() -> None:
             ))
         except Exception:
             pass  # Column already exists
+        try:
+            await conn.execute(text(
+                "ALTER TABLE documents ADD COLUMN share_token VARCHAR(64)"
+            ))
+        except Exception:
+            pass  # Column already exists

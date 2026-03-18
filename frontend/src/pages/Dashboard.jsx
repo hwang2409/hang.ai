@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [review, setReview] = useState(null)
   const [showSuggested, setShowSuggested] = useState(false)
   const [trends, setTrends] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
 
   useEffect(() => {
     api.get('/pomodoro/stats').then(setPomodoroStats).catch(() => {})
@@ -42,6 +43,7 @@ export default function Dashboard() {
     api.get('/todos?completed=false').then(setTodos).catch(() => {})
     api.get('/dashboard/review').then(setReview).catch(() => {})
     api.get('/dashboard/trends?weeks=8').then(setTrends).catch(() => {})
+    api.get('/pomodoro/analytics?weeks=12').then(setAnalytics).catch(() => {})
   }, [])
 
   // Heatmap data: minutes per day for last 365 days
@@ -542,6 +544,71 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* Study Time Analytics */}
+          {analytics && analytics.weekly_hours?.some(w => w.hours > 0) && (() => {
+            const weeks = analytics.weekly_hours
+            const maxHours = Math.max(...weeks.map(w => w.hours), 1)
+            const trendColor = analytics.trend === 'increasing' ? '#4ade80'
+              : analytics.trend === 'decreasing' ? '#f87171' : (dark ? '#555' : '#999')
+            const trendLabel = analytics.trend === 'increasing' ? 'trending up'
+              : analytics.trend === 'decreasing' ? 'trending down' : 'stable'
+
+            return (
+              <div className="rounded-xl border p-4 mb-6" style={cardStyle}>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[10px] uppercase tracking-wider" style={{ color: dark ? '#333' : '#bbb' }}>
+                    study time
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] flex items-center gap-1" style={{ color: trendColor }}>
+                      {analytics.trend === 'increasing' ? '↑' : analytics.trend === 'decreasing' ? '↓' : '→'} {trendLabel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { label: 'avg / week', value: `${analytics.avg_hours_per_week}h` },
+                    { label: 'best week', value: `${analytics.best_week_hours}h` },
+                    { label: 'total', value: `${analytics.total_hours}h` },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="text-center">
+                      <p className="text-sm font-semibold" style={{ color: dark ? '#e0e0e0' : '#1a1a1a' }}>{value}</p>
+                      <p className="text-[9px] uppercase tracking-wider" style={{ color: dark ? '#333' : '#bbb' }}>{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 12-week bar chart */}
+                <div className="flex items-end gap-1" style={{ height: 80 }}>
+                  {weeks.map((w, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                      <div
+                        className="w-full rounded-sm"
+                        title={`${w.week}: ${w.hours}h (${w.sessions} sessions)`}
+                        style={{
+                          height: w.hours > 0 ? Math.max((w.hours / maxHours) * 60, 3) : 3,
+                          background: w.hours > 0 ? (dark ? '#60a5fa' : '#2563eb') : (dark ? '#151515' : '#eee'),
+                          maxWidth: 28,
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {/* Week labels - first and last */}
+                <div className="flex justify-between mt-1">
+                  <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                    {weeks.length > 0 ? new Date(weeks[0].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                  </span>
+                  <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                    {weeks.length > 0 ? new Date(weeks[weeks.length - 1].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Pending Todos */}

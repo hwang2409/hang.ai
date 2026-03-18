@@ -22,6 +22,7 @@ import Quizzes from './pages/Quizzes'
 import QuizTake from './pages/QuizTake'
 import Wiki from './pages/Wiki'
 import Settings from './pages/Settings'
+import SharedNote from './pages/SharedNote'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/shared/:token" element={<SharedNote />} />
         <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
         <Route path="/notes/:id" element={<PrivateRoute><NoteEdit /></PrivateRoute>} />
         <Route path="/flashcards" element={<PrivateRoute><Flashcards /></PrivateRoute>} />

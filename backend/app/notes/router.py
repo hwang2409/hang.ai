@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -9,6 +10,8 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 from starlette.responses import Response, FileResponse
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -373,6 +376,33 @@ async def export_markdown_zip(
     )
 
 
+# ── Sharing ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/shared/{share_token}")
+async def get_shared_note(
+    share_token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint — no auth required. Returns note content by share token."""
+    result = await db.execute(
+        select(Document).where(
+            Document.share_token == share_token,
+            Document.deleted == False,  # noqa: E712
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Shared note not found")
+    return {
+        "title": doc.title,
+        "content": doc.content,
+        "type": doc.type,
+        "created_at": doc.created_at,
+        "updated_at": doc.updated_at,
+    }
+
+
 # ── Documents (by ID) ─────────────────────────────────────────────────────────
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
@@ -392,6 +422,51 @@ async def get_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return doc
+
+
+@router.post("/{doc_id}/share")
+async def share_document(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a share token for a note. Returns the token."""
+    import secrets
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == current_user.id,
+            Document.deleted == False,  # noqa: E712
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.share_token:
+        doc.share_token = secrets.token_urlsafe(32)
+        await db.commit()
+        await db.refresh(doc)
+    return {"share_token": doc.share_token}
+
+
+@router.delete("/{doc_id}/share", status_code=status.HTTP_204_NO_CONTENT)
+async def unshare_document(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Revoke sharing for a note."""
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_id,
+            Document.user_id == current_user.id,
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc.share_token = None
+    await db.commit()
 
 
 @router.put("/{doc_id}", response_model=DocumentResponse)
@@ -669,6 +744,79 @@ async def delete_document_link(
     await db.commit()
 
 
+# ── Smart Note Connections ────────────────────────────────────────────────────
+
+@router.get("/{doc_id}/suggestions")
+async def get_note_suggestions(
+    doc_id: int,
+    limit: int = Query(5, ge=1, le=10),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return semantically similar notes that aren't already linked."""
+    from app.search.models import NoteEmbedding
+    from app.search.service import cosine_similarity
+    import json as _json
+
+    # Get the target note's embedding
+    result = await db.execute(
+        select(NoteEmbedding).where(NoteEmbedding.document_id == doc_id)
+    )
+    target_emb = result.scalar_one_or_none()
+    if not target_emb:
+        return []
+
+    target_vec = _json.loads(target_emb.embedding)
+
+    # Get IDs of already-linked notes
+    link_result = await db.execute(
+        select(DocumentLink).where(
+            DocumentLink.user_id == current_user.id,
+            or_(
+                DocumentLink.source_id == doc_id,
+                DocumentLink.target_id == doc_id,
+            ),
+        )
+    )
+    linked_ids = set()
+    for link in link_result.scalars().all():
+        linked_ids.add(link.target_id if link.source_id == doc_id else link.source_id)
+
+    # Get all other embeddings for user's documents
+    result = await db.execute(
+        select(NoteEmbedding, Document).join(
+            Document, NoteEmbedding.document_id == Document.id
+        ).where(
+            Document.user_id == current_user.id,
+            Document.deleted == False,  # noqa: E712
+            Document.id != doc_id,
+            ~Document.id.in_(linked_ids) if linked_ids else True,
+        )
+    )
+    rows = result.all()
+
+    # Compute similarities and rank
+    scored = []
+    for emb, doc in rows:
+        doc_vec = _json.loads(emb.embedding)
+        sim = cosine_similarity(target_vec, doc_vec)
+        if sim > 0.35:
+            scored.append((sim, doc))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    return [
+        {
+            "id": doc.id,
+            "title": doc.title or "Untitled",
+            "preview": (doc.content or "")[:150],
+            "similarity": round(sim, 3),
+            "type": doc.type,
+        }
+        for sim, doc in scored[:limit]
+    ]
+
+
 # ── Note Analysis ──────────────────────────────────────────────────────────────
 
 async def analyze_document_background(doc_id: int, content: str, title: str):
@@ -894,24 +1042,80 @@ Keep the outline concise and well-organized. Maximum 4 levels of depth. Focus on
 # ── PDF Export ─────────────────────────────────────────────────────────────
 
 _PDF_CSS = """
-body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 40px; }
-h1 { font-size: 22pt; font-weight: 600; margin-bottom: 4px; color: #111; }
-h2 { font-size: 16pt; font-weight: 600; margin-top: 24px; color: #222; }
-h3 { font-size: 13pt; font-weight: 600; margin-top: 20px; color: #333; }
-h4, h5, h6 { font-size: 11pt; font-weight: 600; margin-top: 16px; }
-p { margin: 8px 0; }
-.subtitle { font-size: 9pt; color: #888; margin-bottom: 24px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
-table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 10pt; }
+body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; color: #1a1a1a; line-height: 1.5; margin: 0; padding: 36px; }
+h1 { font-size: 20pt; font-weight: 600; margin-top: 0; margin-bottom: 2px; color: #111; }
+h2 { font-size: 15pt; font-weight: 600; margin-top: 16px; margin-bottom: 4px; color: #222; }
+h3 { font-size: 12pt; font-weight: 600; margin-top: 12px; margin-bottom: 4px; color: #333; }
+h4, h5, h6 { font-size: 11pt; font-weight: 600; margin-top: 10px; margin-bottom: 2px; }
+p { margin: 4px 0; }
+div { margin: 4px 0; }
+.subtitle { font-size: 9pt; color: #888; margin-bottom: 16px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; font-size: 10pt; }
 th { background-color: #f5f5f5; font-weight: 600; }
-pre { background-color: #f5f5f5; padding: 10px 12px; border-radius: 4px; font-size: 9pt; overflow-x: auto; }
+pre { background-color: #f5f5f5; padding: 8px 10px; border-radius: 4px; font-size: 9pt; overflow-x: auto; margin: 6px 0; }
 code { font-family: 'Courier New', monospace; font-size: 9pt; background-color: #f0f0f0; padding: 1px 4px; border-radius: 2px; }
 pre code { background: none; padding: 0; }
-blockquote { border-left: 3px solid #ccc; margin: 12px 0; padding: 4px 16px; color: #555; }
-ul, ol { padding-left: 24px; }
-li { margin: 4px 0; }
-hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding: 2px 14px; color: #555; }
+ul, ol { padding-left: 20px; margin: 4px 0; }
+li { margin: 2px 0; }
+hr { border: none; border-top: 1px solid #ddd; margin: 12px 0; }
+img { margin: 2px 0; }
 """
+
+
+def _latex_to_img(latex_str: str, display: bool = False) -> str:
+    """Render a LaTeX expression to a base64 PNG <img> tag."""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+        import base64
+
+        fontsize = 13 if display else 10
+        dpi = 120
+
+        fig, ax = plt.subplots(figsize=(0.01, 0.01))
+        ax.axis('off')
+        ax.text(0, 0, f"${latex_str.strip()}$", fontsize=fontsize,
+                ha='left', va='bottom', transform=ax.transAxes)
+
+        buf = BytesIO()
+        fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
+                    pad_inches=0.03, transparent=False, facecolor='white')
+        plt.close(fig)
+        buf.seek(0)
+        b64 = base64.b64encode(buf.read()).decode('ascii')
+        uri = f'data:image/png;base64,{b64}'
+
+        if display:
+            return f'<div style="text-align:center;margin:4px 0;padding:0"><img src="{uri}" style="max-width:80%"></div>'
+        else:
+            return f'<img src="{uri}" style="vertical-align:middle;height:14px">'
+    except Exception:
+        escaped = latex_str.strip().replace('<', '&lt;').replace('>', '&gt;')
+        if display:
+            return f'<div style="text-align:center;margin:8px 0;font-family:monospace">{escaped}</div>'
+        return f'<code>{escaped}</code>'
+
+
+def _preprocess_latex(content: str) -> str:
+    """Convert LaTeX $$...$$ and $...$ to rendered PNG images."""
+    # Block math: $$...$$ (including multiline)
+    content = re.sub(
+        r'\$\$(.*?)\$\$',
+        lambda m: _latex_to_img(m.group(1), display=True),
+        content,
+        flags=re.DOTALL,
+    )
+    # Inline math: $...$ (not $$)
+    content = re.sub(
+        r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)',
+        lambda m: _latex_to_img(m.group(1), display=False),
+        content,
+    )
+    return content
 
 
 @router.get("/{doc_id}/export/pdf")
@@ -922,40 +1126,42 @@ async def export_pdf(
     db: AsyncSession = Depends(get_db),
 ):
     """Export a text note as a styled PDF."""
-    from jose import JWTError, jwt as jose_jwt
-    from app.config import settings
     try:
-        payload = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id = int(payload.get("sub", 0))
-        if not user_id:
+        from jose import JWTError, jwt as jose_jwt
+        from app.config import settings
+        try:
+            payload = jose_jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            user_id = int(payload.get("sub", 0))
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except (JWTError, ValueError):
             raise HTTPException(status_code=401, detail="Invalid token")
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
 
-    result = await db.execute(
-        select(Document).where(
-            Document.id == doc_id,
-            Document.user_id == user_id,
-            Document.deleted == False,  # noqa: E712
+        result = await db.execute(
+            select(Document).where(
+                Document.id == doc_id,
+                Document.user_id == user_id,
+                Document.deleted == False,  # noqa: E712
+            )
         )
-    )
-    doc = result.scalar_one_or_none()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        doc = result.scalar_one_or_none()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-    if doc.type in ("canvas", "moodboard"):
-        raise HTTPException(status_code=400, detail="PDF export is only available for text notes")
+        if doc.type in ("canvas", "moodboard"):
+            raise HTTPException(status_code=400, detail="PDF export is only available for text notes")
 
-    import markdown as md
-    from xhtml2pdf import pisa
+        import markdown as md
+        from xhtml2pdf import pisa
 
-    html_body = md.markdown(
-        doc.content or "",
-        extensions=["tables", "fenced_code", "codehilite"],
-    )
+        processed = _preprocess_latex(doc.content or "")
+        html_body = md.markdown(
+            processed,
+            extensions=["tables", "fenced_code", "codehilite"],
+        )
 
-    title = doc.title or "Untitled"
-    html = f"""<!DOCTYPE html>
+        title = doc.title or "Untitled"
+        html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>{_PDF_CSS}</style></head>
 <body>
 <h1>{title}</h1>
@@ -963,30 +1169,28 @@ async def export_pdf(
 {html_body}
 </body></html>"""
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    try:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         pisa_status = pisa.CreatePDF(html, dest=tmp)
         tmp.close()
         if pisa_status.err:
             os.unlink(tmp.name)
             raise HTTPException(status_code=500, detail="PDF generation failed")
+
+        safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:60]
+        filename = f"{safe_title}.pdf"
+
+        background_tasks.add_task(os.unlink, tmp.name)
+        return FileResponse(
+            tmp.name,
+            media_type="application/pdf",
+            filename=filename,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     except HTTPException:
         raise
-    except Exception:
-        tmp.close()
-        os.unlink(tmp.name)
-        raise HTTPException(status_code=500, detail="PDF generation failed")
-
-    safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:60]
-    filename = f"{safe_title}.pdf"
-
-    background_tasks.add_task(os.unlink, tmp.name)
-    return FileResponse(
-        tmp.name,
-        media_type="application/pdf",
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    except Exception as e:
+        logger.exception(f"PDF export failed for doc {doc_id}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
 
 
 # ── Tags ───────────────────────────────────────────────────────────────────────

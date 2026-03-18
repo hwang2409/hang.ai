@@ -53,6 +53,7 @@ class DocumentResponse(BaseModel):
     user_id: int
     folder_id: Optional[int]
     preview_image_url: Optional[str]
+    share_token: Optional[str] = None
     deleted: bool
     created_at: datetime
     updated_at: datetime

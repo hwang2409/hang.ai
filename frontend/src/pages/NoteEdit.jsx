@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download } from 'lucide-react'
+import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download, Share2, Link2, Link2Off } from 'lucide-react'
 import { api } from '../lib/api'
 import { getCached, setCache, updateCacheMessages } from '../lib/noteThreadCache'
 import { useChat } from '../hooks/useChat'
@@ -57,6 +57,11 @@ export default function NoteEdit() {
   const [chatInput, setChatInput] = useState('')
   const [sidebarTab, setSidebarTab] = useState('chat')
 
+  // Share state
+  const [shareToken, setShareToken] = useState(null)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+
   // Lookup state
   const [lookups, setLookups] = useState([])
   const [activeLookupId, setActiveLookupId] = useState(null)
@@ -73,6 +78,7 @@ export default function NoteEdit() {
 
   // Linked notes state
   const [linkedNotes, setLinkedNotes] = useState([])
+  const [suggestions, setSuggestions] = useState([])
 
   // Wiki links: all note titles for resolution + autocomplete
   const [noteTitles, setNoteTitles] = useState([])
@@ -253,6 +259,7 @@ export default function NoteEdit() {
         setNote(data)
         setTitle(data.title || '')
         setContent(data.content || '')
+        setShareToken(data.share_token || null)
         setTags((data.tags || []).map(t => typeof t === 'string' ? t : t.name))
         try {
           const anns = await api.get(`/annotations?document_id=${id}`)
@@ -271,6 +278,12 @@ export default function NoteEdit() {
           setLinkedNotes(links)
         } catch (err) {
           if (err?.status !== 404) console.error('Failed to load links:', err)
+        }
+        try {
+          const sug = await api.get(`/notes/${id}/suggestions`)
+          setSuggestions(sug)
+        } catch {
+          setSuggestions([])
         }
         try {
           const allNotes = await api.get('/notes')
@@ -439,6 +452,36 @@ export default function NoteEdit() {
     await sendMessage(msg)
   }
 
+  const handleShare = async () => {
+    try {
+      const { share_token } = await api.post(`/notes/${id}/share`)
+      setShareToken(share_token)
+      const url = `${window.location.origin}/shared/${share_token}`
+      await navigator.clipboard.writeText(url)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    } catch (err) {
+      console.error('Share failed:', err)
+    }
+  }
+
+  const handleUnshare = async () => {
+    try {
+      await api.delete(`/notes/${id}/share`)
+      setShareToken(null)
+      setShareMenuOpen(false)
+    } catch (err) {
+      console.error('Unshare failed:', err)
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    const url = `${window.location.origin}/shared/${shareToken}`
+    await navigator.clipboard.writeText(url)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
+
   const handleChatKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
   }
@@ -553,6 +596,7 @@ export default function NoteEdit() {
     try {
       const link = await api.post(`/notes/${id}/links`, { target_id: targetId })
       setLinkedNotes(prev => [...prev, link])
+      setSuggestions(prev => prev.filter(s => s.id !== targetId))
     } catch (err) {
       console.error('Failed to create link:', err)
     }
@@ -1025,6 +1069,46 @@ export default function NoteEdit() {
               <Download size={18} />
             </button>
           )}
+          <div className="relative">
+            {!shareToken ? (
+              <button
+                onClick={handleShare}
+                className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
+                title="Share note"
+              >
+                <Share2 size={18} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShareMenuOpen(s => !s)}
+                className="p-2 rounded-md transition-colors text-[#c4a759] bg-[#191919]"
+                title="Sharing enabled"
+              >
+                <Share2 size={18} />
+              </button>
+            )}
+            {shareMenuOpen && shareToken && (
+              <>
+              <div className="fixed inset-0 z-40" onClick={() => setShareMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 bg-[#111111] border border-[#1c1c1c] rounded-lg shadow-xl z-50 w-56 py-1">
+                <button
+                  onClick={() => { handleCopyShareLink(); setShareMenuOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#d4d4d4] hover:bg-[#191919] transition-colors"
+                >
+                  <Link2 size={13} />
+                  {shareCopied ? 'copied!' : 'copy share link'}
+                </button>
+                <button
+                  onClick={handleUnshare}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[#191919] transition-colors"
+                >
+                  <Link2Off size={13} />
+                  stop sharing
+                </button>
+              </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className={`p-2 rounded-md transition-colors ${chatOpen ? 'bg-[#191919] text-[#d4d4d4]' : 'text-[#333333] hover:text-[#606060]'}`}
@@ -1150,6 +1234,7 @@ export default function NoteEdit() {
                 onCancelEditAnnotation={() => setEditingAnnotation(null)}
                 onDeleteAnnotation={handleDeleteAnnotation}
                 linkedNotes={linkedNotes}
+                suggestions={suggestions}
                 onAddLink={handleAddLink}
                 onRemoveLink={handleRemoveLink}
                 noteId={parseInt(id)}

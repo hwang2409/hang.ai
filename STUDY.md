@@ -67,7 +67,7 @@ Most notes apps only store information. The best one should help users:
 | Detect prerequisites / concept dependencies | ✅ (insights tab) |
 | Auto-generate table of contents for long notes | ✅ |
 | Auto-detect topics across all notes | ⬜ |
-| Smart note connections ("this note mentions X — see also Note Y") | ⬜ |
+| Smart note connections ("this note mentions X — see also Note Y") | ✅ |
 
 ---
 
@@ -114,7 +114,7 @@ Most notes apps only store information. The best one should help users:
 | Summarize passages (selection action) | ✅ |
 | Feynman technique with AI scoring | ✅ |
 | Saved lookup results per note | ✅ (lookups module) |
-| Socratic dialogue mode (AI probes your understanding) | ⬜ |
+| Socratic dialogue mode (AI probes your understanding) | ✅ |
 | Step-by-step problem walkthrough UI | ⬜ |
 | Error pattern analysis (you keep getting X wrong — here's why) | ⬜ |
 
@@ -187,7 +187,7 @@ Most notes apps only store information. The best one should help users:
 | Feynman exam prep | ✅ |
 | Concept review (insights tab) | ✅ |
 | Timed exam simulation (multi-quiz, strict timer, no feedback until end) | ⬜ |
-| Socratic mode (AI interrogates your knowledge) | ⬜ |
+| Socratic mode (AI interrogates your knowledge) | ✅ |
 
 ---
 
@@ -203,7 +203,7 @@ Most notes apps only store information. The best one should help users:
 | Activity heatmap | ✅ |
 | Performance trends over time (weekly accuracy chart) | ✅ |
 | Topic mastery visualization (strong vs weak subjects) | ⬜ |
-| Study time analytics (hours/week, trending) | ⬜ |
+| Study time analytics (hours/week, trending) | ✅ |
 | Predicted exam readiness score | ⬜ |
 
 ---
@@ -232,7 +232,7 @@ Most notes apps only store information. The best one should help users:
 | Export flashcard deck (Anki format) | ✅ |
 | Export all notes as markdown zip | ✅ |
 | Import from Notion / Obsidian | ⬜ |
-| Share note via public read-only link | ⬜ |
+| Share note via public read-only link | ✅ |
 
 ---
 
@@ -256,21 +256,21 @@ Most notes apps only store information. The best one should help users:
 |--------|----------|
 | Clean UX | **8/8** |
 | Frictionless Capture | **10/11** (missing: screenshot) |
-| Automatic Understanding | **7/9** (missing: cross-note topics, smart connections) |
+| Automatic Understanding | **8/9** (missing: cross-note topics) |
 | Note Transformation | **7/9** (missing: practice problems, study guides) |
 | Built-In Retention | **7/10** (missing: quiz SR, interleaved practice, forgetting curves) |
-| Real Learning Support | **6/9** (missing: socratic mode, step-by-step UI, error analysis) |
-| Knowledge Connections | **6/9** (missing: concept maps, clustering, auto-linking) |
+| Real Learning Support | **7/9** (missing: step-by-step UI, error analysis) |
+| Knowledge Connections | **7/9** (missing: concept maps, clustering, auto-linking) |
 | Smart Search | **5/5** |
 | Annotations | **6/6** |
 | Action Workflow | **8/9** (missing: calendar) |
-| Study & Exam Modes | **5/7** (missing: exam simulation, socratic mode) |
-| Analytics | **7/10** (missing: mastery viz, study time, readiness) |
+| Study & Exam Modes | **6/7** (missing: exam simulation) |
+| Analytics | **8/10** (missing: mastery viz, readiness) |
 | STEM Support | **5/7** (missing: code execution, handwriting OCR) |
-| Export & Portability | **5/7** (missing: import, sharing) |
+| Export & Portability | **6/7** (missing: import) |
 | Personalization | **5/7** (missing: habit analysis, adaptive scheduling) |
 
-**Overall: ~101/122 features implemented (~83%)**
+**Overall: ~106/122 features implemented (~87%)**
 
 ---
 

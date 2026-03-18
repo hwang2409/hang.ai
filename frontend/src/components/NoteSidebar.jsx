@@ -303,7 +303,7 @@ export default function NoteSidebar({
   onEditAnnotation, onEditAnnotationChange, onUpdateAnnotation, onCancelEditAnnotation, onDeleteAnnotation,
   onAnnotationCardClick,
   // Link props
-  linkedNotes = [], onAddLink, onRemoveLink, noteId,
+  linkedNotes = [], suggestions = [], onAddLink, onRemoveLink, noteId,
   // Insights props
   insights = null, insightsLoading = false, onAddInsightTag, onCreateFlashcard,
   // Close
@@ -580,7 +580,7 @@ export default function NoteSidebar({
             linkedNoteIds={new Set(linkedNotes.map(l => l.note_id))}
             onAddLink={onAddLink}
           />
-          {linkedNotes.length === 0 && (
+          {linkedNotes.length === 0 && suggestions.length === 0 && (
             <EmptyState>no linked notes yet.<br />search above to link related notes.</EmptyState>
           )}
           {linkedNotes.map((link) => (
@@ -591,6 +591,45 @@ export default function NoteSidebar({
               dark={dark}
             />
           ))}
+          {suggestions.length > 0 && (
+            <div className="pt-2 mt-1 border-t border-[#1c1c1c]">
+              <span className="text-[10px] uppercase tracking-wider text-[#444444] block mb-2">suggested connections</span>
+              <div className="space-y-2">
+                {suggestions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="rounded-lg p-3 group"
+                    style={{
+                      background: dark
+                        ? 'linear-gradient(135deg, rgba(130,196,89,0.03) 0%, rgba(17,17,17,1) 60%)'
+                        : 'linear-gradient(135deg, rgba(80,160,60,0.04) 0%, #ffffff 60%)',
+                      border: `1px solid ${dark ? '#1c1c1c' : '#ddd9d0'}`,
+                      borderLeft: `2px solid ${dark ? 'rgba(130,196,89,0.25)' : 'rgba(60,140,40,0.35)'}`,
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-[#d4d4d4] truncate font-medium">{s.title}</p>
+                        <p className="text-[10px] text-[#505050] truncate mt-1">{s.preview}</p>
+                      </div>
+                      <button
+                        onClick={() => onAddLink(s.id)}
+                        className="text-[9px] text-[#444444] hover:text-[#d4d4d4] transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 border border-[#1c1c1c] rounded px-1.5 py-0.5"
+                      >
+                        + link
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="h-1 rounded-full flex-1" style={{ background: dark ? '#1a1a1a' : '#eee', maxWidth: 60 }}>
+                        <div className="h-1 rounded-full" style={{ width: `${Math.round(s.similarity * 100)}%`, background: 'rgba(130,196,89,0.4)' }} />
+                      </div>
+                      <span className="text-[9px] text-[#333333]">{Math.round(s.similarity * 100)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* Insights tab */

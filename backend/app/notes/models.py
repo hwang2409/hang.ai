@@ -57,6 +57,7 @@ class Document(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folders.id"), nullable=True)
     preview_image_url: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    share_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
     deleted: Mapped[bool] = mapped_column(default=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())

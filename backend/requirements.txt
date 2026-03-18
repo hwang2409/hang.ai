@@ -15,5 +15,6 @@ python-pptx
 youtube-transcript-api
 markdown
 xhtml2pdf
+matplotlib
 genanki
 openai

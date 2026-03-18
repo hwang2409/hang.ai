@@ -36,3 +36,17 @@ class StatsResponse(BaseModel):
     current_streak: int
     total_sessions: int
     total_focus_minutes: int
+
+
+class WeeklyHours(BaseModel):
+    week: str  # ISO date of week start (Monday)
+    hours: float
+    sessions: int
+
+
+class AnalyticsResponse(BaseModel):
+    weekly_hours: list[WeeklyHours]
+    avg_hours_per_week: float
+    total_hours: float
+    best_week_hours: float
+    trend: str  # "increasing" | "decreasing" | "stable"

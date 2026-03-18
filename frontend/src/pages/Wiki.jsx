@@ -33,7 +33,7 @@ Notes auto-save as you type — you'll see a small status indicator showing "sav
 - **Dashboard** — see your activity heatmap, study stats, and daily review
 - **Chat** — have conversations with AI, with optional web search
 - **Flashcards** — create and study flashcards with spaced repetition
-- **Feynman** — practice explaining topics in simple terms
+- **Feynman** — practice explaining topics in simple terms, or use Socratic mode for AI-driven Q&A
 - **Pomodoro** — focus timer with break management
 - **Todos** — task list with priorities and due dates
 - **Study Plan** — AI-generated study schedules from your syllabus
@@ -176,6 +176,25 @@ In the Feynman page:
 The AI scores your explanation (0-100) and gives detailed feedback on clarity, accuracy, and completeness. Your history of sessions is saved so you can track improvement over time.`,
       },
       {
+        id: 'socratic',
+        title: 'Socratic Dialogue',
+        content: `Socratic mode flips the Feynman approach — instead of you explaining, the **AI asks you questions** to probe your understanding.
+
+How it works:
+1. Go to the **Feynman** page and switch to the **socratic** tab
+2. Enter a topic (optionally select a reference note)
+3. Click **start dialogue** — the AI asks its first probing question
+4. Type your answer and press **Enter** (or click send)
+5. The AI adapts its questions based on your answers, probing weak areas
+6. After 5-10 exchanges, the AI evaluates your understanding with a score, strengths, weaknesses, and feedback
+
+You can end the session early by clicking the **stop** button (square icon). The AI will evaluate based on the answers you've given so far.
+
+All socratic sessions appear in the **history** tab alongside regular Feynman sessions, marked with a chat icon.
+
+**Tip:** Socratic mode is more rigorous than Feynman — the AI will find gaps you didn't know you had. Use it before exams for topics you think you already know.`,
+      },
+      {
         id: 'study-plan',
         title: 'Study Plans',
         content: `Paste your syllabus or list of topics, set an exam date, and the AI generates a structured study plan with a timeline.
@@ -254,12 +273,15 @@ Create todos for study tasks, assignments, or anything else you need to track.`,
         title: 'Dashboard',
         content: `Your activity overview showing:
 
+- **Daily brief** — AI-generated action plan: what to study next, overdue tasks, weak topics
 - **365-day heatmap** — visualize your daily study consistency
-- **Weekly focus chart** — Pomodoro minutes per day
+- **Pomodoro stats** — today's focus time, weekly total, streak, and all-time hours
 - **Flashcard progress** — cards due, mastered, and learning
-- **Recent notes** — quick access to your latest work
+- **Performance trends** — weekly quiz accuracy, flashcard retention, and study minutes
+- **Study time analytics** — 12-week bar chart of weekly study hours with trend indicator (increasing/decreasing/stable), average hours per week, and best week
+- **Weekly focus chart** — Pomodoro minutes per day for the current week
 - **Pending todos** — upcoming tasks at a glance
-- **Daily review** — AI-generated summary of your day's activity
+- **Recent activity** — latest Pomodoro sessions and note edits
 
 Check your dashboard regularly to stay on top of your study habits.`,
       },
@@ -274,15 +296,79 @@ Check your dashboard regularly to stay on top of your study habits.`,
         title: 'Document Library',
         content: `Upload files to your library for reference alongside your notes:
 
-- **PDFs** — viewed in an embedded PDF reader
+- **PDFs** — viewed in an embedded PDF reader with page annotations
 - **Images** — full-screen image viewer
-- **Videos** — built-in video player
-- **Audio** — audio playback
+- **Videos** — built-in video player with timestamp annotations
+- **Audio** — audio playback with timestamp annotations and transcription
 - **PowerPoints** — PPTX file support
 
 Upload via drag-and-drop or the file picker. You can also add URLs as link references.
 
 Filter your library by file type using the tabs at the top.`,
+      },
+      {
+        id: 'voice-recording',
+        title: 'Voice Recording',
+        content: `Record audio directly in the app — perfect for capturing lectures or verbal notes.
+
+1. In the **Library**, click the **microphone** button next to the upload button
+2. Grant microphone permission when prompted
+3. A recording overlay appears with a live timer and pulsing indicator
+4. Click **stop** to finish, or **cancel** to discard
+5. The recording is automatically uploaded to your library
+
+If you have an OpenAI API key configured, recordings are **automatically transcribed** using Whisper. The transcript appears below the audio player and can be converted to a note.
+
+For pre-existing audio files, click **transcribe audio** in the file viewer to trigger transcription manually.`,
+      },
+      {
+        id: 'sharing',
+        title: 'Note Sharing',
+        content: `Share any note via a public read-only link:
+
+1. Open the note you want to share
+2. Click the **share** icon in the toolbar (top-right area)
+3. Click **copy share link** — a unique URL is copied to your clipboard
+4. Anyone with the link can view the note (no login required)
+
+To stop sharing, click the share icon again and select **stop sharing**. The link will immediately stop working.
+
+Shared notes display the full rendered markdown including math, code, and tables — but viewers cannot edit.`,
+      },
+    ],
+  },
+  {
+    id: 'export',
+    title: 'Export & Sharing',
+    items: [
+      {
+        id: 'pdf-export',
+        title: 'PDF Export',
+        content: `Export any note as a PDF:
+
+1. Open the note
+2. Click the **download** icon in the toolbar
+3. A styled PDF is generated and downloaded
+
+The PDF includes rendered markdown, code blocks, tables, and **LaTeX math** (rendered as high-quality images). Great for printing study guides or submitting formatted notes.`,
+      },
+      {
+        id: 'anki-export',
+        title: 'Anki Deck Export',
+        content: `Export your flashcards as an Anki-compatible deck (.apkg file):
+
+1. Go to the **Flashcards** page
+2. Click the **export** button
+3. An .apkg file downloads containing all your cards
+
+Import it directly into Anki to study on mobile or sync across devices. Cards include full markdown formatting.`,
+      },
+      {
+        id: 'note-sharing',
+        title: 'Public Sharing',
+        content: `Share any note via a public read-only link. Click the **share** icon in the note toolbar to generate a link. Anyone with the link can view the rendered note without logging in.
+
+Stop sharing at any time from the same menu — the link immediately stops working.`,
       },
     ],
   },
@@ -301,6 +387,20 @@ Filter your library by file type using the tabs at the top.`,
 Both methods create bidirectional connections. If Note A links to Note B, then Note B's links tab will also show Note A.
 
 Links created via wiki links in your content are automatically synced to the sidebar links tab when you save.`,
+      },
+      {
+        id: 'smart-connections',
+        title: 'Smart Connections',
+        content: `Hang automatically suggests related notes based on semantic similarity. Open any note's sidebar **links** tab to see:
+
+- **Explicit links** — notes you've manually linked or connected via wiki links
+- **Suggested connections** — AI-detected notes with similar content
+
+Suggestions show a similarity percentage and a **+ link** button. Click it to convert a suggestion into an explicit link.
+
+This is powered by the same embedding model used for semantic search. The more notes you write, the better the suggestions become.
+
+**Tip:** Check suggested connections after writing new notes — you'll often find relevant connections you didn't think of.`,
       },
       {
         id: 'knowledge-graph',
