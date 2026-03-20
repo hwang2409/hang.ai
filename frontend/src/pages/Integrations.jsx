@@ -337,7 +337,7 @@ export default function Integrations() {
                 </div>
 
                 <p className="text-xs text-text-muted leading-relaxed">
-                  Events are automatically created in a "Hang.ai Study Schedule" calendar when you
+                  Events are automatically created in a "Neuronic Study Schedule" calendar when you
                   add todos, generate study plans, or review flashcards.
                 </p>
               </div>

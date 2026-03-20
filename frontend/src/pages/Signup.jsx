@@ -42,7 +42,7 @@ export default function Signup() {
         {/* Brand */}
         <div className="mb-8">
           <h1 className="text-2xl font-light tracking-tight text-text">
-            hang v1
+            neuronic
           </h1>
           <p className="text-xs uppercase tracking-[0.15em] text-text-secondary mt-2">
             create account

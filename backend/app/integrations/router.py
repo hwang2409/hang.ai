@@ -380,7 +380,7 @@ async def google_calendar_callback(
     await db.commit()
     await db.refresh(integration)
 
-    # Create the Hang.ai calendar and run full sync in background
+    # Create the Neuronic calendar and run full sync in background
     async def _setup_and_sync():
         from app.database import async_session
         from app.integrations.google_calendar import (
@@ -429,7 +429,7 @@ async def disconnect_google_calendar(
     if not integration:
         raise HTTPException(status_code=404, detail="Google Calendar not connected")
 
-    # Best-effort delete the Hang.ai calendar from Google
+    # Best-effort delete the Neuronic calendar from Google
     try:
         config = json.loads(integration.config or "{}")
         cal_id = config.get("google_calendar_id")

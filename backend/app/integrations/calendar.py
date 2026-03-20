@@ -11,10 +11,10 @@ from app.studyplan.models import StudyPlan, StudyPlanItem
 
 async def generate_ical_feed(user_id: int, db: AsyncSession) -> str:
     cal = Calendar()
-    cal.add("prodid", "-//Hang.ai//Study Calendar//EN")
+    cal.add("prodid", "-//Neuronic//Study Calendar//EN")
     cal.add("version", "2.0")
     cal.add("calscale", "GREGORIAN")
-    cal.add("x-wr-calname", "Hang.ai Study Schedule")
+    cal.add("x-wr-calname", "Neuronic Study Schedule")
 
     now = datetime.now(timezone.utc)
     today = date.today()
@@ -41,8 +41,8 @@ async def generate_ical_feed(user_id: int, db: AsyncSession) -> str:
         event.add("summary", f"Review {count} flashcard{'s' if count != 1 else ''}")
         event.add("dtstart", check_date)
         event.add("dtend", check_date)
-        event.add("description", f"{count} flashcard{'s' if count != 1 else ''} due for review on Hang.ai")
-        event["uid"] = f"flashcard-due-{check_date.isoformat()}@hang.ai"
+        event.add("description", f"{count} flashcard{'s' if count != 1 else ''} due for review on Neuronic")
+        event["uid"] = f"flashcard-due-{check_date.isoformat()}@neuronic"
         cal.add_component(event)
 
     # Also add overdue flashcards as a single event for today
@@ -59,7 +59,7 @@ async def generate_ical_feed(user_id: int, db: AsyncSession) -> str:
         event.add("dtstart", today)
         event.add("dtend", today)
         event.add("description", f"{overdue_count} flashcard{'s' if overdue_count != 1 else ''} are overdue for review")
-        event["uid"] = f"flashcard-overdue-{today.isoformat()}@hang.ai"
+        event["uid"] = f"flashcard-overdue-{today.isoformat()}@neuronic"
         cal.add_component(event)
 
     # 2. Todos with due dates
@@ -79,7 +79,7 @@ async def generate_ical_feed(user_id: int, db: AsyncSession) -> str:
         event.add("summary", f"{prefix}{todo.text}")
         event.add("dtstart", todo.due_date)
         event.add("dtend", todo.due_date)
-        event["uid"] = f"todo-{todo.id}-{todo.due_date.isoformat()}@hang.ai"
+        event["uid"] = f"todo-{todo.id}-{todo.due_date.isoformat()}@neuronic"
         cal.add_component(event)
 
     # 3. Study plan items
@@ -103,7 +103,7 @@ async def generate_ical_feed(user_id: int, db: AsyncSession) -> str:
             event.add("dtend", item.date)
             if item.description:
                 event.add("description", item.description)
-            event["uid"] = f"studyplan-{item.id}-{item.date.isoformat()}@hang.ai"
+            event["uid"] = f"studyplan-{item.id}-{item.date.isoformat()}@neuronic"
             cal.add_component(event)
     except Exception:
         pass

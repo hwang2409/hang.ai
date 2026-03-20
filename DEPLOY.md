@@ -1,4 +1,4 @@
-# Deploying hang v1
+# Deploying neuronic
 
 Vercel frontend + DigitalOcean backend.
 

@@ -9,8 +9,8 @@ const sections = [
     items: [
       {
         id: 'overview',
-        title: 'What is Hang?',
-        content: `Hang is an all-in-one study and productivity workspace. It combines note-taking, spaced repetition flashcards, AI chat, a Pomodoro timer, todo management, and more — all in one place.
+        title: 'What is Neuronic?',
+        content: `Neuronic is an all-in-one study and productivity workspace. It combines note-taking, spaced repetition flashcards, AI chat, a Pomodoro timer, todo management, and more — all in one place.
 
 Everything is designed to help you capture, connect, and retain knowledge. Write notes in markdown, link them together with wiki links, quiz yourself with flashcards, and let AI help you understand difficult concepts.`,
       },
@@ -444,7 +444,7 @@ Links created via wiki links in your content are automatically synced to the sid
       {
         id: 'smart-connections',
         title: 'Smart Connections',
-        content: `Hang automatically suggests related notes based on semantic similarity. Open any note's sidebar **links** tab to see:
+        content: `Neuronic automatically suggests related notes based on semantic similarity. Open any note's sidebar **links** tab to see:
 
 - **Explicit links** — notes you've manually linked or connected via wiki links
 - **Suggested connections** — AI-detected notes with similar content

@@ -42,7 +42,7 @@ async def fire_webhook(integration: UserIntegration, event: str, data: dict) -> 
 async def fire_test_webhook(url: str) -> tuple[bool, int | None, str | None]:
     """Send a test webhook to verify URL works. Returns (success, status_code, error)."""
     payload = {
-        "text": "Test notification from Hang.ai — your webhook is working!",
+        "text": "Test notification from Neuronic — your webhook is working!",
         "event": "test",
         "data": {"test": True},
     }
@@ -81,7 +81,7 @@ def _build_summary(event: str, data: dict) -> str:
         streak = data.get("streak", 0)
         return f"Study streak milestone: {streak} days! Keep it going!"
 
-    return f"Hang.ai notification: {event}"
+    return f"Neuronic notification: {event}"
 
 
 async def fire_webhooks_for_user(user_id: int, event: str, data: dict, db) -> None:

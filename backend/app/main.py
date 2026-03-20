@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     await close_cache()
 
 
-app = FastAPI(title="Hang.ai API", lifespan=lifespan, redirect_slashes=False)
+app = FastAPI(title="Neuronic API", lifespan=lifespan, redirect_slashes=False)
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)

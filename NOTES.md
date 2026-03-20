@@ -1,8 +1,8 @@
-# Hang.ai — Codebase Notes
+# Neuronic — Codebase Notes
 
 ## What Is This?
 
-Hang.ai is an educational/study platform. This directory (`rewrite/`) is a ground-up rewrite from a monolithic Django backend into a microservices architecture using FastAPI, with a modern React frontend.
+Neuronic is an educational/study platform. This directory (`rewrite/`) is a ground-up rewrite from a monolithic Django backend into a microservices architecture using FastAPI, with a modern React frontend.
 
 The old codebase lives at `../hang-backend/` (Django) and `../hang-frontend/` (Next.js). Both are being replaced.
 

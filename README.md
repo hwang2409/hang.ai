@@ -1,4 +1,4 @@
-# hang.ai
+# neuronic
 
 An AI-powered study platform that transforms passive note-taking into active learning. Drop in messy notes, PDFs, and recordings — get summaries, flashcards, quizzes, explanations, and a personalized study plan.
 

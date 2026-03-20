@@ -170,7 +170,7 @@ async def export_annotations(
 
     # Build markdown
     lines = ["# Annotations Export\n\n"]
-    lines.append(f"*Exported from Hang.ai*\n\n---\n\n")
+    lines.append(f"*Exported from Neuronic*\n\n---\n\n")
 
     if doc_annotations:
         lines.append("## Document Annotations\n\n")

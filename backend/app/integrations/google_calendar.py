@@ -18,7 +18,7 @@ from app.integrations.models import UserIntegration
 logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-CALENDAR_SUMMARY = "Hang.ai Study Schedule"
+CALENDAR_SUMMARY = "Neuronic Study Schedule"
 CALENDAR_COLOR = "9"  # bold blue
 
 
@@ -277,7 +277,7 @@ async def sync_flashcard_batch_to_gcal(user_id: int, target_date: date, count: i
 
 
 async def full_sync(user_id: int, db: AsyncSession) -> None:
-    """Delete and recreate the Hang.ai calendar, then sync all data."""
+    """Delete and recreate the Neuronic calendar, then sync all data."""
     from app.flashcards.models import Flashcard
     from app.todos.models import TodoItem
     from app.studyplan.models import StudyPlan, StudyPlanItem
@@ -305,7 +305,7 @@ async def full_sync(user_id: int, db: AsyncSession) -> None:
     try:
         new_cal_id = await asyncio.to_thread(_create_hang_calendar_sync, creds)
     except Exception as e:
-        logger.error("Failed to create Hang.ai calendar: %s", e)
+        logger.error("Failed to create Neuronic calendar: %s", e)
         return
 
     config["google_calendar_id"] = new_cal_id

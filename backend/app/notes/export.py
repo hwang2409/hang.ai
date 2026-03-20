@@ -278,7 +278,7 @@ async def export_pdf(
 <html><head><meta charset="utf-8"><style>{_PDF_CSS}</style></head>
 <body>
 <h1>{title}</h1>
-<div class="subtitle">Exported from Hang.ai</div>
+<div class="subtitle">Exported from Neuronic</div>
 {html_body}
 </body></html>"""
 

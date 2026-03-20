@@ -232,7 +232,7 @@ async def export_anki(
         raise HTTPException(status_code=404, detail="No flashcards to export")
 
     # Determine deck name
-    deck_name = "Hang.ai Flashcards"
+    deck_name = "Neuronic Flashcards"
     deck_id = _ANKI_DECK_BASE_ID + user_id
     if note_id is not None:
         note_result = await db.execute(
@@ -240,12 +240,12 @@ async def export_anki(
         )
         note = note_result.scalar_one_or_none()
         if note and note.title:
-            deck_name = f"Hang.ai — {note.title}"
+            deck_name = f"Neuronic — {note.title}"
         deck_id = _ANKI_DECK_BASE_ID + note_id
 
     model = genanki.Model(
         _ANKI_MODEL_ID,
-        "Hang.ai Flashcard",
+        "Neuronic Flashcard",
         fields=[{"name": "Front"}, {"name": "Back"}],
         templates=[{
             "name": "Card 1",

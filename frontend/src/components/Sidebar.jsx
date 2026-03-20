@@ -38,7 +38,7 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-6 border-b border-border">
         <span className="text-lg font-semibold text-text tracking-tight">
-          hang v1
+          neuronic
         </span>
         <button
           onClick={() => setMobileOpen(false)}
