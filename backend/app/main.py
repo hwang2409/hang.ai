@@ -55,9 +55,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Neuronic API", lifespan=lifespan, redirect_slashes=False)
 
 app.state.limiter = limiter
-app.add_middleware(SlowAPIMiddleware)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Middleware runs in reverse order: last added = outermost (runs first)
+app.add_middleware(AccessLogMiddleware)
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
@@ -65,7 +67,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(AccessLogMiddleware)
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(notes_router, prefix="/notes", tags=["notes"])
