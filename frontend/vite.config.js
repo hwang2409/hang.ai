@@ -22,6 +22,9 @@ export default defineConfig({
       '/file-annotations': 'http://localhost:8000',
       '/lookups': 'http://localhost:8000',
       '/quizzes': 'http://localhost:8000',
+      '/integrations': 'http://localhost:8000',
+      '/studyplan': 'http://localhost:8000',
+      '/dashboard': 'http://localhost:8000',
     }
   }
 })

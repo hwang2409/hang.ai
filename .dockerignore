@@ -1,0 +1,9 @@
+node_modules
+venv
+__pycache__
+.git
+*.db
+*.db-shm
+*.db-wal
+dist
+.env

@@ -1,4 +1,4 @@
-const API_BASE = ''  // uses vite proxy
+const API_BASE = import.meta.env.VITE_API_URL || ''  // empty = vite proxy in dev
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers }

@@ -181,6 +181,7 @@ export default function Todos() {
     api.get(`/todos${q}`).then(setTodos).catch(() => {})
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [showCompleted, sortBy])
 
   const add = async (e) => {

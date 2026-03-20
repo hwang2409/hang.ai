@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, X, Trash2, AlertTriangle, ExternalLink, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
@@ -152,8 +152,11 @@ const LinkSearchInput = ({ noteId, linkedNoteIds, onAddLink }) => {
   const timerRef = useRef(null)
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); setOpen(false); return }
     if (timerRef.current) clearTimeout(timerRef.current)
+    if (!query.trim()) {
+      timerRef.current = setTimeout(() => { setResults([]); setOpen(false) }, 0)
+      return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    }
     timerRef.current = setTimeout(async () => {
       try {
         const data = await api.post('/notes/search', { query: query.trim() })

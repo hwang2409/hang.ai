@@ -15,7 +15,10 @@ export default function ContextMenu({ x, y, items, onClose }) {
     if (y + rect.height > window.innerHeight - pad) ay = y - rect.height
     if (ax < pad) ax = pad
     if (ay < pad) ay = pad
-    setAdjusted({ x: ax, y: ay })
+    const handle = requestAnimationFrame(() => {
+      setAdjusted({ x: ax, y: ay })
+    })
+    return () => cancelAnimationFrame(handle)
   }, [x, y])
 
   // Dismiss on outside click, escape, scroll
@@ -41,15 +44,15 @@ export default function ContextMenu({ x, y, items, onClose }) {
       className="fixed z-[100] context-menu-enter"
       style={{ left: adjusted.x, top: adjusted.y }}
     >
-      <div className="min-w-[160px] rounded-lg border border-[#1c1c1c] overflow-hidden py-1 context-menu-stagger context-menu-surface">
+      <div className="min-w-[160px] rounded-lg border border-border overflow-hidden py-1 context-menu-stagger context-menu-surface">
 
         {items.map((item, i) => {
           if (item.separator) {
-            return <div key={`sep-${i}`} className="my-1 mx-2 border-t border-[#1a1a1a]" />
+            return <div key={`sep-${i}`} className="my-1 mx-2 border-t border-border" />
           }
 
           const isDanger = item.variant === 'danger'
-          const needsConfirm = item.confirm && confirmId !== item.id
+          const _needsConfirm = item.confirm && confirmId !== item.id
 
           return (
             <button
@@ -79,8 +82,8 @@ export default function ContextMenu({ x, y, items, onClose }) {
                   className={`flex-shrink-0 transition-colors duration-150 ${
                     isDanger
                       ? confirmId === item.id
-                        ? 'text-[#aa5555]'
-                        : 'text-[#553333] group-hover:text-[#884444]'
+                        ? 'text-danger'
+                        : 'text-danger/60 group-hover:text-danger'
                       : 'text-[#444444] group-hover:text-[#c4a759]'
                   }`}
                 />
@@ -88,21 +91,21 @@ export default function ContextMenu({ x, y, items, onClose }) {
               <span className={`text-[11px] tracking-wide transition-colors duration-150 ${
                 isDanger
                   ? confirmId === item.id
-                    ? 'text-[#aa5555]'
-                    : 'text-[#664444] group-hover:text-[#884444]'
-                  : 'text-[#606060] group-hover:text-[#d4d4d4]'
+                    ? 'text-danger'
+                    : 'text-danger/70 group-hover:text-danger'
+                  : 'text-text-secondary group-hover:text-text'
               }`}>
                 {confirmId === item.id ? item.confirmLabel || 'confirm?' : item.label}
               </span>
               {item.shortcut && (
-                <span className="ml-auto text-[9px] text-[#2a2a2a] group-hover:text-[#444444] tracking-wider font-mono transition-colors duration-150">
+                <span className="ml-auto text-[9px] text-text-muted group-hover:text-[#444444] tracking-wider font-mono transition-colors duration-150">
                   {item.shortcut}
                 </span>
               )}
 
               {/* Warm side glow on hover */}
               <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-0 rounded-full transition-all duration-200 group-hover:h-3/5 ${
-                isDanger ? 'bg-[#884444]' : 'bg-[#c4a759]'
+                isDanger ? 'bg-danger' : 'bg-[#c4a759]'
               }`} style={{ opacity: 0.5 }} />
             </button>
           )

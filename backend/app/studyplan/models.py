@@ -27,9 +27,9 @@ class StudyPlanItem(Base):
     __tablename__ = "study_plan_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    plan_id: Mapped[int] = mapped_column(ForeignKey("study_plans.id", ondelete="CASCADE"))
+    plan_id: Mapped[int] = mapped_column(ForeignKey("study_plans.id", ondelete="CASCADE"), index=True)
     day_number: Mapped[int] = mapped_column(Integer)
-    date: Mapped[date] = mapped_column(Date)
+    date: Mapped[date] = mapped_column(Date, index=True)
     topic: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text, default="")
     completed: Mapped[bool] = mapped_column(Boolean, default=False)

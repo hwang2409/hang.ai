@@ -159,6 +159,8 @@ Great for design inspiration, visual research, or collecting references.`,
 
 The algorithm adjusts review intervals based on your performance. Cards you struggle with appear more frequently.
 
+**Interleaved Practice:** By default, due cards are shuffled across topics (interleaved) rather than grouped by note. Research shows interleaving improves long-term retention. You can toggle this with the shuffle icon in the study header.
+
 **Stats:** The flashcards page shows your total cards, cards due today, mastered cards, and weak spots (cards with low ease scores).
 
 **Keyboard shortcuts in study mode:** Space to flip, 1-4 to rate.`,
@@ -195,6 +197,25 @@ All socratic sessions appear in the **history** tab alongside regular Feynman se
 **Tip:** Socratic mode is more rigorous than Feynman — the AI will find gaps you didn't know you had. Use it before exams for topics you think you already know.`,
       },
       {
+        id: 'practice-problems',
+        title: 'Practice Problems',
+        content: `The **practice** tab in the Feynman page generates open-ended problems for any topic with step-by-step feedback.
+
+How it works:
+1. Go to **Feynman** > **practice** tab
+2. Enter a topic and choose a difficulty (easy, medium, hard)
+3. Optionally select a reference note for context
+4. Click **generate problem** — the AI creates a problem with hints and a solution
+5. Work through the problem and write your answer
+6. Click **check answer** — the AI evaluates your solution, scores it, and identifies missed steps
+
+**Hints:** Click "show hint" for progressive hints (2-3 per problem) if you're stuck. Hints are revealed one at a time.
+
+**Solution:** You can reveal the full solution and answer at any time by clicking "show solution". This is available both before and after checking your answer.
+
+**Tip:** Use practice problems to prepare for exams. They go beyond quizzes by requiring you to show your work, not just pick an answer.`,
+      },
+      {
         id: 'study-plan',
         title: 'Study Plans',
         content: `Paste your syllabus or list of topics, set an exam date, and the AI generates a structured study plan with a timeline.
@@ -202,6 +223,37 @@ All socratic sessions appear in the **history** tab alongside regular Feynman se
 Each plan has checkable items you can mark off as you study. The plan is saved and you can return to it anytime from the study plan page.
 
 Create multiple plans for different subjects or exams.`,
+      },
+      {
+        id: 'quizzes',
+        title: 'Quizzes & Exam Mode',
+        content: `Generate quizzes from your notes with multiple choice, true/false, and fill-in-the-blank questions.
+
+**Standard mode:** After each question, you get immediate feedback showing whether you were correct, the right answer, and an explanation.
+
+**Exam simulation mode:** Click the **exam** button (shield icon) next to any quiz to take it in exam mode. In exam mode:
+- No feedback is shown after each question
+- Questions auto-advance when you answer
+- You see all results only after completing the entire quiz
+- A full review shows every question with your answer and the correct answer
+- Timer runs throughout for realistic exam conditions
+
+**Keyboard shortcuts:** 1-4 for multiple choice, T/F for true/false, Enter to submit fill-in-the-blank, Enter/Space to advance (standard mode).
+
+**Tip:** Take a quiz in standard mode first to learn the material, then retake it in exam mode to simulate real test conditions.`,
+      },
+      {
+        id: 'study-guide',
+        title: 'Study Guide Compilation',
+        content: `Select multiple notes and compile them into a single study guide using AI.
+
+How it works:
+1. On the **notes** page, click the **book** icon in the header to enter select mode
+2. Click notes to select them (golden border shows selection)
+3. Click **compile guide** — the AI merges and organizes the content into a comprehensive study guide
+4. A new note is created with the compiled guide, which you can then edit
+
+The AI eliminates redundancy, organizes by topic, includes key definitions and formulas, and adds a summary section at the top. Select 2-10 notes at a time.`,
       },
     ],
   },
@@ -277,6 +329,7 @@ Create todos for study tasks, assignments, or anything else you need to track.`,
 - **365-day heatmap** — visualize your daily study consistency
 - **Pomodoro stats** — today's focus time, weekly total, streak, and all-time hours
 - **Flashcard progress** — cards due, mastered, and learning
+- **Topic mastery** — per-topic mastery bars aggregated from flashcard ease, quiz scores, and Feynman evaluations. Color-coded: green (70%+), gold (40-70%), red (below 40%)
 - **Performance trends** — weekly quiz accuracy, flashcard retention, and study minutes
 - **Study time analytics** — 12-week bar chart of weekly study hours with trend indicator (increasing/decreasing/stable), average hours per week, and best week
 - **Weekly focus chart** — Pomodoro minutes per day for the current week

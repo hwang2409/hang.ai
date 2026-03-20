@@ -91,6 +91,33 @@ class QuizBriefInfo(BaseModel):
     attempt_count: int
 
 
+class TopicMastery(BaseModel):
+    topic: str
+    note_id: Optional[int] = None
+    mastery_pct: float  # 0-100
+    flashcard_ease: Optional[float] = None
+    flashcard_count: int = 0
+    quiz_avg_pct: Optional[float] = None
+    quiz_attempts: int = 0
+    feynman_score: Optional[int] = None
+
+
+class TopicMasteryResponse(BaseModel):
+    topics: list[TopicMastery] = []
+
+
+class HabitInsight(BaseModel):
+    category: str  # "timing", "consistency", "sessions", "performance"
+    title: str     # short headline, e.g. "You study best in the afternoon"
+    detail: str    # explanation
+
+
+class HabitsResponse(BaseModel):
+    insights: list[HabitInsight]
+    study_days_last_30: int
+    avg_daily_minutes: float
+
+
 class DashboardReview(BaseModel):
     due_flashcards: list[DueFlashcard] = []
     due_flashcard_count: int = 0

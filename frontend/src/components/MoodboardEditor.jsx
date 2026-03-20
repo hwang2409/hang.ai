@@ -24,9 +24,9 @@ function AutoTextarea({ value, onChange, placeholder, className, style, onClick 
 }
 
 const DARK_COLORS = ['#1a1a2e', '#2d1b2e', '#1b2e1b', '#2e2a1b', '#1b1b2e', '#2e1b1b']
-const LIGHT_COLORS = ['#e8e5f0', '#f0e5ee', '#e5f0e8', '#f0ede5', '#e5e5f0', '#f0e5e5']
+const _LIGHT_COLORS = ['#e8e5f0', '#f0e5ee', '#e5f0e8', '#f0ede5', '#e5e5f0', '#f0e5e5']
 // Map dark colors to their light equivalents for theme switching
-const COLOR_MAP = Object.fromEntries(DARK_COLORS.map((d, i) => [d, LIGHT_COLORS[i]]))
+const COLOR_MAP = Object.fromEntries(DARK_COLORS.map((d, i) => [d, _LIGHT_COLORS[i]]))
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10)
@@ -62,16 +62,19 @@ export default function MoodboardEditor({ initialData, onChange, dark, onGenerat
 
   // Sync external updates (from AI edits)
   useEffect(() => {
-    try {
-      const parsed = JSON.parse(initialData || '{}')
-      const newItems = parsed.items || []
-      setData(prev => {
-        if (JSON.stringify(prev.items) !== JSON.stringify(newItems)) {
-          return { ...prev, items: newItems, settings: parsed.settings || prev.settings }
-        }
-        return prev
-      })
-    } catch { /* ignore */ }
+    const handle = requestAnimationFrame(() => {
+      try {
+        const parsed = JSON.parse(initialData || '{}')
+        const newItems = parsed.items || []
+        setData(prev => {
+          if (JSON.stringify(prev.items) !== JSON.stringify(newItems)) {
+            return { ...prev, items: newItems, settings: parsed.settings || prev.settings }
+          }
+          return prev
+        })
+      } catch { /* ignore */ }
+    })
+    return () => cancelAnimationFrame(handle)
   }, [initialData])
 
   const save = useCallback((newData) => {

@@ -1,21 +1,20 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 
 export default function CanvasEditor({ initialData, onChange, dark, onApiReady }) {
-  const [excalidrawAPI, setExcalidrawAPI] = useState(null)
+  const [_excalidrawAPI, setExcalidrawAPI] = useState(null)
   const debounceRef = useRef(null)
-  const initialParsed = useRef(null)
 
   // Parse initial data once
-  if (initialParsed.current === null) {
+  const initialParsed = useMemo(() => {
     try {
       const parsed = initialData ? JSON.parse(initialData) : null
-      initialParsed.current = parsed && parsed.elements ? parsed : { elements: [], files: {} }
+      return parsed && parsed.elements ? parsed : { elements: [], files: {} }
     } catch {
-      initialParsed.current = { elements: [], files: {} }
+      return { elements: [], files: {} }
     }
-  }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = useCallback((elements, appState, files) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -43,12 +42,12 @@ export default function CanvasEditor({ initialData, onChange, dark, onApiReady }
       <Excalidraw
         excalidrawAPI={(api) => { setExcalidrawAPI(api); onApiReady?.(api) }}
         initialData={{
-          elements: initialParsed.current.elements || [],
+          elements: initialParsed.elements || [],
           appState: {
-            ...(initialParsed.current.appState || {}),
+            ...(initialParsed.appState || {}),
             theme: dark ? 'dark' : 'light',
           },
-          files: initialParsed.current.files || {},
+          files: initialParsed.files || {},
         }}
         theme={dark ? 'dark' : 'light'}
         onChange={handleChange}

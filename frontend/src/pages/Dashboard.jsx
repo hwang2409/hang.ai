@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap } from 'lucide-react'
+import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap, Lightbulb, TrendingUp, Timer, BarChart3 } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [showSuggested, setShowSuggested] = useState(false)
   const [trends, setTrends] = useState(null)
   const [analytics, setAnalytics] = useState(null)
+  const [mastery, setMastery] = useState(null)
+  const [habits, setHabits] = useState(null)
 
   useEffect(() => {
     api.get('/pomodoro/stats').then(setPomodoroStats).catch(() => {})
@@ -44,6 +46,8 @@ export default function Dashboard() {
     api.get('/dashboard/review').then(setReview).catch(() => {})
     api.get('/dashboard/trends?weeks=8').then(setTrends).catch(() => {})
     api.get('/pomodoro/analytics?weeks=12').then(setAnalytics).catch(() => {})
+    api.get('/dashboard/mastery').then(setMastery).catch(() => {})
+    api.get('/dashboard/habits').then(setHabits).catch(() => {})
   }, [])
 
   // Heatmap data: minutes per day for last 365 days
@@ -155,10 +159,7 @@ export default function Dashboard() {
     return '#c4a759'
   }
 
-  const cardStyle = {
-    background: dark ? '#0d0d0d' : '#fafafa',
-    borderColor: dark ? '#1a1a1a' : '#eee',
-  }
+  const cardClasses = 'bg-bg-secondary border-border'
 
   return (
     <Layout>
@@ -172,8 +173,8 @@ export default function Dashboard() {
           {/* Daily Brief */}
           {review && (() => {
             const items = review.brief_items || []
-            const urgent = items.filter(i => i.priority === 1)
-            const important = items.filter(i => i.priority === 2)
+            const _urgent = items.filter(i => i.priority === 1)
+            const _important = items.filter(i => i.priority === 2)
             const suggested = items.filter(i => i.priority === 3)
             const studyNext = review.study_next
             const estMin = review.estimated_minutes || 0
@@ -186,8 +187,8 @@ export default function Dashboard() {
                 case 'study_plan': return <Calendar size={size} style={{ ...s, color: '#c4a759' }} />
                 case 'quiz_retake': return <RotateCcw size={size} style={{ ...s, color: '#c4a759' }} />
                 case 'feynman_retry': return <BookOpen size={size} style={{ ...s, color: '#f59e0b' }} />
-                case 'upcoming_todo': return <Clock size={size} style={{ ...s, color: dark ? '#444' : '#999' }} />
-                case 'stale_note': return <StickyNote size={size} style={{ ...s, color: dark ? '#444' : '#999' }} />
+                case 'upcoming_todo': return <Clock size={size} className="text-text-muted" style={s} />
+                case 'stale_note': return <StickyNote size={size} className="text-text-muted" style={s} />
                 default: return <ChevronRight size={size} style={s} />
               }
             }
@@ -200,10 +201,10 @@ export default function Dashboard() {
               >
                 {briefIcon(item.type)}
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs block truncate" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>{item.title}</span>
-                  {item.subtitle && <span className="text-[10px] block truncate" style={{ color: dark ? '#444' : '#999' }}>{item.subtitle}</span>}
+                  <span className="text-xs block truncate text-text">{item.title}</span>
+                  {item.subtitle && <span className="text-[10px] block truncate text-text-muted">{item.subtitle}</span>}
                 </div>
-                <ChevronRight size={12} style={{ color: dark ? '#333' : '#bbb', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ChevronRight size={12} style={{ flexShrink: 0 }} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
               </Link>
             )
 
@@ -215,7 +216,7 @@ export default function Dashboard() {
             const remainingImportant = remainingItems.filter(i => i.priority === 2)
 
             return (
-              <div className="rounded-xl border p-5 mb-6" style={{ ...cardStyle, borderColor: dark ? '#2a2211' : '#e8d9a0' }}>
+              <div className={`rounded-xl border p-5 mb-6 ${cardClasses}`} style={{ borderColor: dark ? '#2a2211' : '#e8d9a0' }}>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[10px] uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#c4a759' }}>
@@ -223,7 +224,7 @@ export default function Dashboard() {
                     daily brief
                   </p>
                   {estMin > 0 && (
-                    <span className="text-[10px] flex items-center gap-1" style={{ color: dark ? '#444' : '#999' }}>
+                    <span className="text-[10px] flex items-center gap-1 text-text-muted">
                       <Clock size={9} />
                       ~{formatMinutes(estMin)} today
                     </span>
@@ -232,7 +233,7 @@ export default function Dashboard() {
 
                 {/* Greeting */}
                 {review.greeting && (
-                  <p className="text-sm mb-4" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>
+                  <p className="text-sm mb-4 text-text">
                     {review.greeting}
                   </p>
                 )}
@@ -240,7 +241,7 @@ export default function Dashboard() {
                 {items.length === 0 ? (
                   <div className="flex items-center gap-2 py-3 justify-center">
                     <CheckCircle size={14} style={{ color: '#c4a759' }} />
-                    <span className="text-xs" style={{ color: dark ? '#555' : '#888' }}>nothing on the agenda. enjoy the free time.</span>
+                    <span className="text-xs text-text-secondary">nothing on the agenda. enjoy the free time.</span>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -264,11 +265,11 @@ export default function Dashboard() {
                           <span className="text-[10px] uppercase tracking-wider block mb-0.5" style={{ color: '#c4a759' }}>
                             study next
                           </span>
-                          <span className="text-sm font-medium block truncate" style={{ color: dark ? '#e0e0e0' : '#1a1a1a' }}>
+                          <span className="text-sm font-medium block truncate text-text">
                             {studyNext.title}
                           </span>
                           {studyNext.subtitle && (
-                            <span className="text-[11px] block truncate" style={{ color: dark ? '#555' : '#888' }}>
+                            <span className="text-[11px] block truncate text-text-secondary">
                               {studyNext.subtitle}
                             </span>
                           )}
@@ -312,13 +313,14 @@ export default function Dashboard() {
                           onClick={() => setShowSuggested(!showSuggested)}
                           className="flex items-center gap-1.5 mb-1 w-full text-left bg-transparent border-0 cursor-pointer p-0"
                         >
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: dark ? '#444' : '#999' }} />
-                          <span className="text-[10px] uppercase tracking-wider" style={{ color: dark ? '#444' : '#999' }}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-text-muted" />
+                          <span className="text-[10px] uppercase tracking-wider text-text-muted">
                             suggested ({suggested.length})
                           </span>
                           <ChevronDown
                             size={10}
-                            style={{ color: dark ? '#444' : '#999', transform: showSuggested ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                            className="text-text-muted"
+                            style={{ transform: showSuggested ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
                           />
                         </button>
                         {showSuggested && suggested.map((item, i) => <BriefRow key={`s-${i}`} item={item} />)}
@@ -331,8 +333,8 @@ export default function Dashboard() {
           })()}
 
           {/* Activity Heatmap */}
-          <div className="rounded-xl border p-4 mb-6" style={cardStyle}>
-            <p className="text-[10px] uppercase tracking-wider mb-3" style={{ color: dark ? '#333' : '#bbb' }}>
+          <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+            <p className="text-[10px] uppercase tracking-wider mb-3 text-text-muted">
               study activity
             </p>
             <div className="overflow-x-auto">
@@ -341,9 +343,8 @@ export default function Dashboard() {
                 {monthLabels.map((m, i) => (
                   <span
                     key={i}
-                    className="text-[9px]"
+                    className="text-[9px] text-text-muted"
                     style={{
-                      color: dark ? '#333' : '#bbb',
                       position: 'relative',
                       left: m.week * 13,
                       marginRight: -10,
@@ -383,13 +384,13 @@ export default function Dashboard() {
               { label: 'streak', value: `${pomodoroStats.current_streak}d`, sub: pomodoroStats.current_streak > 0 ? 'keep going' : 'start today', icon: pomodoroStats.current_streak > 0 ? Flame : null },
               { label: 'total', value: formatMinutes(pomodoroStats.total_focus_minutes), sub: `${pomodoroStats.total_sessions} sessions` },
             ].map(({ label, value, sub, icon: StatIcon }) => (
-              <div key={label} className="rounded-xl px-4 py-3 border" style={cardStyle}>
-                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: dark ? '#333' : '#bbb' }}>{label}</p>
-                <p className="text-lg font-semibold flex items-center gap-1" style={{ color: dark ? '#e0e0e0' : '#1a1a1a' }}>
+              <div key={label} className={`rounded-xl px-4 py-3 border ${cardClasses}`}>
+                <p className="text-[10px] uppercase tracking-wider mb-1 text-text-muted">{label}</p>
+                <p className="text-lg font-semibold flex items-center gap-1 text-text">
                   {StatIcon && <StatIcon size={14} style={{ color: '#c4a759' }} />}
                   {value}
                 </p>
-                <p className="text-[11px]" style={{ color: dark ? '#333' : '#bbb' }}>{sub}</p>
+                <p className="text-[11px] text-text-muted">{sub}</p>
               </div>
             ))}
           </div>
@@ -402,9 +403,9 @@ export default function Dashboard() {
                 { label: 'mastered', value: flashcardStats.mastered ?? 0 },
                 { label: 'learning', value: flashcardStats.learning ?? 0 },
               ].map(({ label, value }) => (
-                <div key={label} className="rounded-xl px-4 py-3 border" style={cardStyle}>
-                  <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: dark ? '#333' : '#bbb' }}>{label}</p>
-                  <p className="text-lg font-semibold" style={{ color: dark ? '#e0e0e0' : '#1a1a1a' }}>{value}</p>
+                <div key={label} className={`rounded-xl px-4 py-3 border ${cardClasses}`}>
+                  <p className="text-[10px] uppercase tracking-wider mb-1 text-text-muted">{label}</p>
+                  <p className="text-lg font-semibold text-text">{value}</p>
                 </div>
               ))}
             </div>
@@ -422,7 +423,6 @@ export default function Dashboard() {
               const values = points.map(p => p[valueKey])
               const max = maxOverride || Math.max(...values, 1)
               const h = 80, w = points.length > 1 ? 100 : 100
-              const step = points.length > 1 ? w / (points.length - 1) : w
 
               // Build SVG path
               const pathPoints = values.map((v, i) => {
@@ -438,7 +438,7 @@ export default function Dashboard() {
               return (
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-[10px] uppercase tracking-wider" style={{ color: dark ? '#444' : '#999' }}>{label}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-text-muted">{label}</span>
                     {hasData && (
                       <span className="text-xs font-medium" style={{ color }}>
                         {Math.round(latest)}{suffix}
@@ -477,17 +477,17 @@ export default function Dashboard() {
                     </svg>
                   ) : (
                     <div className="flex items-center justify-center" style={{ height: 80 }}>
-                      <span className="text-[10px]" style={{ color: dark ? '#333' : '#ccc' }}>no data yet</span>
+                      <span className="text-[10px] text-text-muted">no data yet</span>
                     </div>
                   )}
                   {/* Week labels */}
                   <div className="flex justify-between mt-1">
                     {points.length > 0 && (
                       <>
-                        <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                        <span className="text-[8px] text-text-muted">
                           {new Date(points[0].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </span>
-                        <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                        <span className="text-[8px] text-text-muted">
                           {new Date(points[points.length - 1].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </span>
                       </>
@@ -498,8 +498,8 @@ export default function Dashboard() {
             }
 
             return (
-              <div className="rounded-xl border p-4 mb-6" style={cardStyle}>
-                <p className="text-[10px] uppercase tracking-wider mb-4" style={{ color: dark ? '#333' : '#bbb' }}>
+              <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+                <p className="text-[10px] uppercase tracking-wider mb-4 text-text-muted">
                   performance trends
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -518,15 +518,95 @@ export default function Dashboard() {
             )
           })()}
 
+          {/* Topic Mastery */}
+          {mastery && mastery.topics?.length > 0 && (
+            <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+              <p className="text-[10px] uppercase tracking-wider mb-4 text-text-muted">
+                topic mastery
+              </p>
+              <div className="space-y-2.5">
+                {mastery.topics.map((t) => {
+                  const barColor = t.mastery_pct >= 70 ? (dark ? '#4ade80' : '#16a34a')
+                    : t.mastery_pct >= 40 ? '#c4a759'
+                    : (dark ? '#f87171' : '#dc2626')
+                  return (
+                    <div key={t.note_id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <Link
+                          to={`/notes/${t.note_id}`}
+                          className="text-xs truncate max-w-[60%] no-underline text-text"
+                        >
+                          {t.topic}
+                        </Link>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-text-muted">
+                            {t.flashcard_count > 0 && `${t.flashcard_count} cards`}
+                            {t.quiz_attempts > 0 && `${t.flashcard_count > 0 ? ' · ' : ''}${t.quiz_attempts} quiz${t.quiz_attempts !== 1 ? 'zes' : ''}`}
+                            {t.feynman_score != null && `${(t.flashcard_count > 0 || t.quiz_attempts > 0) ? ' · ' : ''}feynman ${t.feynman_score}`}
+                          </span>
+                          <span className="text-xs font-medium w-10 text-right" style={{ color: barColor }}>
+                            {Math.round(t.mastery_pct)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden bg-bg-tertiary">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${Math.max(t.mastery_pct, 2)}%`, background: barColor }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Study Habits */}
+          {habits && habits.insights?.length > 0 && (
+            <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] uppercase tracking-wider flex items-center gap-1.5 text-text-muted">
+                  <Lightbulb size={10} />
+                  study habits
+                </p>
+                {habits.study_days_last_30 > 0 && (
+                  <span className="text-[10px] text-text-muted">
+                    {habits.study_days_last_30} days active · {habits.avg_daily_minutes > 0 ? `~${Math.round(habits.avg_daily_minutes)}m/day avg` : ''}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-3">
+                {habits.insights.map((insight, i) => {
+                  const iconMap = {
+                    performance: <TrendingUp size={13} style={{ color: '#4ade80', flexShrink: 0 }} />,
+                    consistency: <Flame size={13} style={{ color: '#c4a759', flexShrink: 0 }} />,
+                    timing: <Clock size={13} style={{ color: '#60a5fa', flexShrink: 0 }} />,
+                    sessions: <Timer size={13} style={{ color: '#a78bfa', flexShrink: 0 }} />,
+                  }
+                  return (
+                    <div key={i} className="flex gap-3 p-2.5 rounded-lg bg-bg">
+                      <div className="mt-0.5">{iconMap[insight.category] || <BarChart3 size={13} className="text-text-secondary" style={{ flexShrink: 0 }} />}</div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium mb-0.5 text-text">{insight.title}</p>
+                        <p className="text-[11px] leading-relaxed text-text-secondary">{insight.detail}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Weekly Focus Chart */}
-          <div className="rounded-xl border p-4 mb-6" style={cardStyle}>
-            <p className="text-[10px] uppercase tracking-wider mb-3" style={{ color: dark ? '#333' : '#bbb' }}>
+          <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+            <p className="text-[10px] uppercase tracking-wider mb-3 text-text-muted">
               this week
             </p>
             <div className="flex items-end gap-2" style={{ height: 100 }}>
               {weeklyData.map((d, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px]" style={{ color: dark ? '#444' : '#999' }}>
+                  <span className="text-[9px] text-text-muted">
                     {d.minutes > 0 ? formatMinutes(d.minutes) : ''}
                   </span>
                   <div
@@ -537,7 +617,7 @@ export default function Dashboard() {
                       maxWidth: 40,
                     }}
                   />
-                  <span className="text-[9px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                  <span className="text-[9px] text-text-muted">
                     {d.label}
                   </span>
                 </div>
@@ -555,9 +635,9 @@ export default function Dashboard() {
               : analytics.trend === 'decreasing' ? 'trending down' : 'stable'
 
             return (
-              <div className="rounded-xl border p-4 mb-6" style={cardStyle}>
+              <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-[10px] uppercase tracking-wider" style={{ color: dark ? '#333' : '#bbb' }}>
+                  <p className="text-[10px] uppercase tracking-wider text-text-muted">
                     study time
                   </p>
                   <div className="flex items-center gap-3">
@@ -575,8 +655,8 @@ export default function Dashboard() {
                     { label: 'total', value: `${analytics.total_hours}h` },
                   ].map(({ label, value }) => (
                     <div key={label} className="text-center">
-                      <p className="text-sm font-semibold" style={{ color: dark ? '#e0e0e0' : '#1a1a1a' }}>{value}</p>
-                      <p className="text-[9px] uppercase tracking-wider" style={{ color: dark ? '#333' : '#bbb' }}>{label}</p>
+                      <p className="text-sm font-semibold text-text">{value}</p>
+                      <p className="text-[9px] uppercase tracking-wider text-text-muted">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -599,10 +679,10 @@ export default function Dashboard() {
                 </div>
                 {/* Week labels - first and last */}
                 <div className="flex justify-between mt-1">
-                  <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                  <span className="text-[8px] text-text-muted">
                     {weeks.length > 0 ? new Date(weeks[0].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                   </span>
-                  <span className="text-[8px]" style={{ color: dark ? '#333' : '#bbb' }}>
+                  <span className="text-[8px] text-text-muted">
                     {weeks.length > 0 ? new Date(weeks[weeks.length - 1].week + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                   </span>
                 </div>
@@ -612,9 +692,9 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Pending Todos */}
-            <div className="rounded-xl border p-4" style={cardStyle}>
+            <div className={`rounded-xl border p-4 ${cardClasses}`}>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: dark ? '#333' : '#bbb' }}>
+                <p className="text-[10px] uppercase tracking-wider text-text-muted">
                   pending todos
                 </p>
                 <Link to="/todos" className="text-[10px]" style={{ color: '#c4a759' }}>view all</Link>
@@ -624,23 +704,22 @@ export default function Dashboard() {
                   <div key={todo.id} className="flex items-center gap-2 py-1.5">
                     <button
                       onClick={() => toggleTodo(todo)}
-                      className="w-3.5 h-3.5 rounded border flex-shrink-0"
-                      style={{ borderColor: dark ? '#333' : '#ccc' }}
+                      className="w-3.5 h-3.5 rounded border flex-shrink-0 border-border"
                     />
-                    <span className="text-xs truncate" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>
+                    <span className="text-xs truncate text-text">
                       {todo.text}
                     </span>
                   </div>
                 ))}
                 {todos.length === 0 && (
-                  <p className="text-xs py-2" style={{ color: dark ? '#333' : '#bbb' }}>all caught up</p>
+                  <p className="text-xs py-2 text-text-muted">all caught up</p>
                 )}
               </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="rounded-xl border p-4" style={cardStyle}>
-              <p className="text-[10px] uppercase tracking-wider mb-3" style={{ color: dark ? '#333' : '#bbb' }}>
+            <div className={`rounded-xl border p-4 ${cardClasses}`}>
+              <p className="text-[10px] uppercase tracking-wider mb-3 text-text-muted">
                 recent activity
               </p>
               <div className="space-y-1">
@@ -649,18 +728,18 @@ export default function Dashboard() {
                     {item.type === 'pomodoro' ? (
                       <Brain size={12} style={{ color: '#c4a759', flexShrink: 0 }} />
                     ) : (
-                      <FileText size={12} style={{ color: dark ? '#444' : '#999', flexShrink: 0 }} />
+                      <FileText size={12} className="text-text-muted" style={{ flexShrink: 0 }} />
                     )}
-                    <span className="text-xs truncate flex-1" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>
+                    <span className="text-xs truncate flex-1 text-text">
                       {item.text}
                     </span>
-                    <span className="text-[10px] flex-shrink-0" style={{ color: dark ? '#333' : '#bbb' }}>
+                    <span className="text-[10px] flex-shrink-0 text-text-muted">
                       {relativeTime(item.time)}
                     </span>
                   </div>
                 ))}
                 {recentActivity.length === 0 && (
-                  <p className="text-xs py-2" style={{ color: dark ? '#333' : '#bbb' }}>no recent activity</p>
+                  <p className="text-xs py-2 text-text-muted">no recent activity</p>
                 )}
               </div>
             </div>

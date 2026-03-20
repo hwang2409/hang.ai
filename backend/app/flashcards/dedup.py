@@ -71,9 +71,9 @@ async def find_semantic_duplicates(
     existing_list = "\n".join(f"- {f}" for f in existing_fronts)
 
     prompt = (
-        "You are a deduplication assistant. Compare these NEW flashcard questions "
-        "against EXISTING questions and identify which new ones are semantically "
-        "equivalent to an existing one (same concept asked differently).\n\n"
+        "Compare these NEW flashcard questions against EXISTING ones. "
+        "Identify which new ones are semantically equivalent to an existing one "
+        "(same concept asked differently).\n\n"
         f"NEW (numbered):\n{numbered_new}\n\n"
         f"EXISTING:\n{existing_list}\n\n"
         "Return ONLY a JSON array of the indices (integers) of NEW cards that are "

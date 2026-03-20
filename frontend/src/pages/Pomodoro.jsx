@@ -72,10 +72,18 @@ export default function Pomodoro() {
           playNote(880, now, 0.3)
           playNote(1100, now + 0.15, 0.4)
           playNote(880, now + 0.4, 0.3)
-        } catch {}
+        } catch { /* ignored */ }
       }
     }
   }, [])
+
+  const switchMode = useCallback((newMode) => {
+    setRunning(false)
+    clearInterval(intervalRef.current)
+    setMode(newMode)
+    setTimeLeft(MODES[newMode].minutes * 60)
+    startTimeRef.current = null
+  }, [MODES])
 
   // Timer logic
   useEffect(() => {
@@ -91,12 +99,12 @@ export default function Pomodoro() {
       }, 1000)
       return () => clearInterval(intervalRef.current)
     }
-  }, [running])
+  }, [running, timeLeft])
 
   // Handle timer completion
   useEffect(() => {
     if (timeLeft === 0 && running) {
-      setRunning(false)
+      setRunning(false) // eslint-disable-line react-hooks/set-state-in-effect
       audioRef.current?.play()
 
       // Record session
@@ -129,15 +137,7 @@ export default function Pomodoro() {
         }, 1000)
       }
     }
-  }, [timeLeft, running])
-
-  const switchMode = useCallback((newMode) => {
-    setRunning(false)
-    clearInterval(intervalRef.current)
-    setMode(newMode)
-    setTimeLeft(MODES[newMode].minutes * 60)
-    startTimeRef.current = null
-  }, [MODES])
+  }, [timeLeft, running, label, mode, modeConfig.minutes, sessionCount, switchMode])
 
   const toggleTimer = useCallback(() => {
     if (timeLeft === 0) {
@@ -225,18 +225,18 @@ export default function Pomodoro() {
             {[
               { key: 'timer', label: 'timer', icon: Clock },
               { key: 'topics', label: 'topics', icon: Tag },
-            ].map(({ key, label, icon: Icon }) => (
+            ].map((tab) => (
               <button
-                key={key}
-                onClick={() => setActiveTab(key)}
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-all"
                 style={{
-                  color: activeTab === key ? (dark ? '#e0e0e0' : '#1a1a1a') : (dark ? '#444' : '#aaa'),
-                  borderBottom: activeTab === key ? '2px solid #c4a759' : '2px solid transparent',
+                  color: activeTab === tab.key ? (dark ? '#e0e0e0' : '#1a1a1a') : (dark ? '#444' : '#aaa'),
+                  borderBottom: activeTab === tab.key ? '2px solid #c4a759' : '2px solid transparent',
                 }}
               >
-                <Icon size={13} />
-                {label}
+                <tab.icon size={13} />
+                {tab.label}
               </button>
             ))}
           </div>

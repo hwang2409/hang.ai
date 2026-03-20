@@ -46,7 +46,7 @@ async def create_session(
         reference_section = f"\nReference material:\n{note_content}\n"
 
     prompt = (
-        "You are evaluating a student's explanation using the Feynman Technique.\n\n"
+        "Evaluate this explanation using the Feynman Technique.\n\n"
         f"Topic: {body.topic}\n\n"
         f"Student's explanation:\n{body.explanation}\n"
         f"{reference_section}\n"
@@ -138,12 +138,13 @@ async def delete_session(
 # Socratic dialogue endpoints
 # ---------------------------------------------------------------------------
 
-SOCRATIC_SYSTEM = (
-    "You are a Socratic tutor on the Hang.ai learning platform. "
-    "Your job is to probe the student's understanding of a topic through focused questions. "
-    "Ask one question at a time. Adapt your questions based on the student's answers — "
-    "probe deeper where they seem uncertain, and move to new aspects when they demonstrate mastery. "
-    "Be encouraging but rigorous."
+from app.llm.prompts import _sys
+
+SOCRATIC_SYSTEM = _sys(
+    "You are a Socratic tutor. "
+    "Probe the student's understanding through focused questions — one at a time. "
+    "Go deeper where they seem shaky, move on when they've got it. "
+    "Be rigorous but not cold."
 )
 
 MIN_QUESTIONS_BEFORE_AUTO_EVAL = 5
@@ -398,3 +399,90 @@ async def delete_socratic_session(
         raise HTTPException(status_code=404, detail="Session not found")
     await db.delete(session)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Practice problems endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/practice")
+async def generate_practice_problem(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a practice problem for a topic."""
+    topic = body.get("topic", "").strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="Topic is required")
+
+    note_content = await _get_note_content(db, body.get("note_id"), current_user.id)
+    reference_section = f"\nReference material:\n{note_content}\n" if note_content else ""
+
+    difficulty = body.get("difficulty", "medium")
+
+    prompt = (
+        f"Topic: {topic}\n{reference_section}\n"
+        f"Generate a {difficulty}-difficulty practice problem on this topic.\n\n"
+        "Return ONLY a JSON object with these fields:\n"
+        '- "problem": string (the problem statement, can use markdown/LaTeX)\n'
+        '- "hints": array of strings (2-3 progressive hints)\n'
+        '- "solution": string (detailed step-by-step solution)\n'
+        '- "answer": string (the final concise answer)\n'
+    )
+
+    raw = await evaluate_text(prompt)
+    try:
+        parsed = parse_llm_json(raw)
+    except (json.JSONDecodeError, Exception):
+        parsed = {"problem": raw.strip(), "hints": [], "solution": "", "answer": ""}
+
+    return {
+        "problem": parsed.get("problem", ""),
+        "hints": parsed.get("hints", []),
+        "solution": parsed.get("solution", ""),
+        "answer": parsed.get("answer", ""),
+    }
+
+
+@router.post("/practice/check")
+async def check_practice_answer(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Check a student's answer to a practice problem."""
+    problem = body.get("problem", "").strip()
+    student_answer = body.get("student_answer", "").strip()
+    answer = body.get("answer", "")
+    solution = body.get("solution", "")
+
+    if not problem or not student_answer:
+        raise HTTPException(status_code=400, detail="Problem and student answer are required")
+
+    prompt = (
+        "Evaluate the student's answer to this practice problem.\n\n"
+        f"Problem: {problem}\n\n"
+        f"Correct answer: {answer}\n\n"
+        f"Full solution: {solution}\n\n"
+        f"Student's answer: {student_answer}\n\n"
+        "Return ONLY a JSON object with:\n"
+        '- "correct": boolean (is the answer substantially correct?)\n'
+        '- "score": integer 0-100\n'
+        '- "feedback": string (specific feedback on their answer)\n'
+        '- "steps_missed": array of strings (any steps or concepts they missed)\n'
+    )
+
+    raw = await evaluate_text(prompt)
+    try:
+        parsed = parse_llm_json(raw)
+    except (json.JSONDecodeError, Exception):
+        parsed = {"correct": False, "score": 0, "feedback": raw.strip(), "steps_missed": []}
+
+    return {
+        "correct": parsed.get("correct", False),
+        "score": parsed.get("score", 0),
+        "feedback": parsed.get("feedback", ""),
+        "steps_missed": parsed.get("steps_missed", []),
+    }

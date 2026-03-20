@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +6,7 @@ from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.todos.models import TodoItem
 from app.todos.schemas import TodoCreate, TodoUpdate, TodoResponse
+from app.cache import cache_delete_pattern
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ async def list_todos(
 @router.post("", response_model=TodoResponse, status_code=201)
 async def create_todo(
     body: TodoCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -45,6 +47,12 @@ async def create_todo(
     db.add(todo)
     await db.commit()
     await db.refresh(todo)
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    if todo.due_date is not None:
+        from app.task_dispatch import dispatch_gcal_todo_sync
+        dispatch_gcal_todo_sync(todo.id, todo.text, todo.due_date, todo.completed, current_user.id, background_tasks)
+
     return todo
 
 
@@ -52,6 +60,7 @@ async def create_todo(
 async def update_todo(
     todo_id: int,
     body: TodoUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -74,12 +83,18 @@ async def update_todo(
         todo.priority = body.priority
     await db.commit()
     await db.refresh(todo)
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    from app.task_dispatch import dispatch_gcal_todo_sync
+    dispatch_gcal_todo_sync(todo.id, todo.text, todo.due_date, todo.completed, current_user.id, background_tasks)
+
     return todo
 
 
 @router.delete("/{todo_id}", status_code=204)
 async def delete_todo(
     todo_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -92,5 +107,11 @@ async def delete_todo(
     todo = result.scalar_one_or_none()
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
+
+    _todo_id, _uid = todo.id, current_user.id
     await db.delete(todo)
     await db.commit()
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    from app.task_dispatch import dispatch_gcal_delete_todo
+    dispatch_gcal_delete_todo(_todo_id, _uid, background_tasks)

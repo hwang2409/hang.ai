@@ -79,26 +79,26 @@ export default function SelectionToolbar({ position, onAction, onDismiss, allowe
               : '0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(160,130,40,0.08), 0 1px 0 0 rgba(255,255,255,0.8) inset',
           }}
         >
-          {(() => { const items = allowedActions ? actions.filter(a => allowedActions.includes(a.id)) : actions; return items.map(({ id, icon: Icon, label }, i) => (
+          {(allowedActions ? actions.filter(a => allowedActions.includes(a.id)) : actions).map((action, i, items) => (
             <button
-              key={id}
-              onClick={() => handleActionClick(id)}
+              key={action.id}
+              onClick={() => handleActionClick(action.id)}
               className={`group relative flex flex-col items-center gap-0.5 px-3 py-2 transition-all duration-150 hover:bg-[rgba(196,167,89,0.08)] ${
-                id === 'highlight' && showColors ? (dark ? 'bg-[rgba(196,167,89,0.12)]' : 'bg-[rgba(196,167,89,0.1)]') : ''
+                action.id === 'highlight' && showColors ? (dark ? 'bg-[rgba(196,167,89,0.12)]' : 'bg-[rgba(196,167,89,0.1)]') : ''
               }`}
               style={i < items.length - 1 ? { borderRight: `1px solid ${dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.06)'}` } : {}}
             >
-              <Icon
+              <action.icon
                 size={13}
                 className={`transition-colors duration-150 group-hover:text-[#c4a759] ${
-                  id === 'highlight' && showColors ? 'text-[#c4a759]' : (dark ? 'text-[#606060]' : 'text-[#998f80]')
+                  action.id === 'highlight' && showColors ? 'text-[#c4a759]' : (dark ? 'text-[#606060]' : 'text-[#998f80]')
                 }`}
               />
               <span className={`text-[9px] leading-none tracking-wide transition-colors duration-150 group-hover:text-[#8b7a3d] ${dark ? 'text-[#3a3a3a]' : 'text-[#b0a898]'}`}>
-                {label}
+                {action.label}
               </span>
             </button>
-          )); })()}
+          ))}
         </div>
 
         {/* Color picker row */}

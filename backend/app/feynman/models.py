@@ -19,8 +19,8 @@ class FeynmanSession(Base):
     strengths: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     weaknesses: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     feedback: Mapped[str] = mapped_column(Text, default="")
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id"), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
 
@@ -36,6 +36,6 @@ class SocraticSession(Base):
     strengths: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     weaknesses: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     feedback: Mapped[str] = mapped_column(Text, default="")
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id"), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())

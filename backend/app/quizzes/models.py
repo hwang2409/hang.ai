@@ -14,7 +14,7 @@ class Quiz(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(500))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id"), nullable=True)
     question_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
@@ -38,11 +38,11 @@ class QuizAttempt(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     score: Mapped[int] = mapped_column(default=0)
     total_questions: Mapped[int] = mapped_column(default=0)
     time_seconds: Mapped[int] = mapped_column(default=0)
-    completed_at: Mapped[datetime] = mapped_column(default=func.now())
+    completed_at: Mapped[datetime] = mapped_column(default=func.now(), index=True)
 
 
 class QuizAnswer(Base):

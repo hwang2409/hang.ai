@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,12 +21,15 @@ from app.quizzes.schemas import (
 )
 from app.llm.service import evaluate_text
 from app.llm.response_parser import parse_llm_json
+from app.rate_limit import limiter
 
 router = APIRouter()
 
 
+@limiter.limit("10/minute")
 @router.post("/generate", response_model=QuizDetailResponse)
 async def generate_quiz(
+    request: Request,
     body: QuizGenerateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -301,6 +304,7 @@ async def get_quiz(
 @router.post("/submit", response_model=QuizAttemptResponse)
 async def submit_quiz(
     body: QuizSubmitRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -386,6 +390,23 @@ async def submit_quiz(
 
     await db.commit()
     await db.refresh(attempt)
+
+    # Fire webhook for quiz_complete
+    async def _fire_quiz_webhook():
+        from app.database import async_session
+        from app.integrations.webhook import fire_webhooks_for_user
+        async with async_session() as s:
+            await fire_webhooks_for_user(
+                current_user.id, "quiz_complete",
+                {
+                    "title": quiz.title,
+                    "score": attempt.score,
+                    "total": attempt.total_questions,
+                    "quiz_id": quiz.id,
+                }, s,
+            )
+
+    background_tasks.add_task(_fire_quiz_webhook)
 
     return QuizAttemptResponse(
         id=attempt.id,

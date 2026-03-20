@@ -38,7 +38,7 @@ export default function Sidebar() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-6 border-b border-border">
         <span className="text-lg font-semibold text-text tracking-tight">
-          hang.
+          hang v1
         </span>
         <button
           onClick={() => setMobileOpen(false)}
@@ -95,34 +95,31 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="px-5 pt-4 pb-5 border-t border-border">
-        <div className="text-sm text-text-secondary truncate">
-          {user?.username || user?.email || 'user'}
-        </div>
-        <div className="mt-2 flex items-center gap-3 text-xs text-text-muted">
+      <div className="px-5 py-4 border-t border-border space-y-1">
+        {[
+          { to: '/wiki', label: 'wiki' },
+          { to: '/settings', label: 'settings' },
+          { to: '/integrations', label: 'integrations' },
+        ].map(({ to, label }) => (
           <NavLink
-            to="/wiki"
-            className={({ isActive }) => `hover:text-text-secondary transition-colors ${isActive ? 'text-text-secondary' : ''}`}
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              isActive
+                ? 'block py-1.5 text-xs text-text-secondary transition-colors'
+                : 'block py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors'
+            }
             onClick={() => setMobileOpen(false)}
           >
-            wiki
+            {label}
           </NavLink>
-          <span className="text-border">·</span>
-          <NavLink
-            to="/settings"
-            className={({ isActive }) => `hover:text-text-secondary transition-colors ${isActive ? 'text-text-secondary' : ''}`}
-            onClick={() => setMobileOpen(false)}
-          >
-            settings
-          </NavLink>
-          <span className="text-border">·</span>
-          <button
-            onClick={logout}
-            className="hover:text-text-secondary transition-colors"
-          >
-            log out
-          </button>
-        </div>
+        ))}
+        <button
+          onClick={logout}
+          className="block w-full text-left py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors bg-transparent border-0 p-0 cursor-pointer mt-2"
+        >
+          log out
+        </button>
       </div>
     </>
   )

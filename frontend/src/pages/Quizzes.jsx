@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, Sparkles, Trash2, X, ChevronDown, Clock, Target } from 'lucide-react'
+import { Play, Sparkles, Trash2, X, ChevronDown, Clock, Target, Shield, RotateCcw } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 
@@ -205,6 +205,14 @@ export default function Quizzes() {
                           take
                         </button>
                         <button
+                          onClick={() => navigate(`/quizzes/take/${quiz.id}?mode=exam`)}
+                          className="border border-[#1c1c1c] text-[#606060] hover:text-[#c4a759] hover:border-[#2a2a2a] rounded-md px-3 py-1.5 transition-colors text-sm flex items-center gap-1.5"
+                          title="No feedback until end"
+                        >
+                          <Shield size={14} />
+                          exam
+                        </button>
+                        <button
                           onClick={() => handleDelete(quiz.id)}
                           className="p-1.5 text-[#333333] hover:text-[#606060] rounded-md transition-colors"
                           title="Delete"
@@ -255,6 +263,14 @@ export default function Quizzes() {
                               <span className="text-xs text-[#333333]">{formatDate(attempt.completed_at)}</span>
                             </div>
                           </div>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); navigate(`/quizzes/take/${attempt.quiz_id}`) }}
+                            className="p-1.5 text-[#333333] hover:text-[#d4d4d4] rounded-md transition-colors"
+                            title="Retake quiz"
+                            role="button"
+                          >
+                            <RotateCcw size={14} />
+                          </span>
                           <ChevronDown size={14} className={`text-[#333333] transition-transform duration-150 mt-1 ${expandedAttempt === attempt.id ? '' : '-rotate-90'}`} />
                         </div>
                       </button>

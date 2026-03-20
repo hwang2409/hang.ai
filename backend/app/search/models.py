@@ -14,7 +14,7 @@ class NoteEmbedding(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     document_id: Mapped[int] = mapped_column(
-        ForeignKey("documents.id", ondelete="CASCADE"), unique=True
+        ForeignKey("documents.id", ondelete="CASCADE"), unique=True, index=True
     )
     embedding: Mapped[str] = mapped_column(Text)  # JSON array of 384 floats
     content_hash: Mapped[str] = mapped_column(String(64))  # SHA-256

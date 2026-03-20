@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown, FileText, Download } from 'lucide-react'
+import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown, FileText, Download, CheckSquare, Square, BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import ContextMenu from '../components/ContextMenu'
@@ -25,6 +25,9 @@ export default function Home() {
   const [contextMenu, setContextMenu] = useState(null) // { x, y, noteId }
   const [showImport, setShowImport] = useState(false)
   const [showCreateMenu, setShowCreateMenu] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedNotes, setSelectedNotes] = useState(new Set())
+  const [compiling, setCompiling] = useState(false)
   const createMenuRef = useRef(null)
   const navigate = useNavigate()
   const debounceRef = useRef(null)
@@ -172,6 +175,30 @@ export default function Home() {
     }
   }
 
+  const toggleNoteSelection = (noteId) => {
+    setSelectedNotes(prev => {
+      const next = new Set(prev)
+      if (next.has(noteId)) next.delete(noteId)
+      else next.add(noteId)
+      return next
+    })
+  }
+
+  const handleCompileGuide = async () => {
+    if (selectedNotes.size < 2) return
+    setCompiling(true)
+    try {
+      const doc = await api.post('/notes/compile-study-guide', { note_ids: [...selectedNotes] })
+      setSelectMode(false)
+      setSelectedNotes(new Set())
+      navigate(`/notes/${doc.id}`)
+    } catch (err) {
+      console.error('Failed to compile study guide:', err)
+    } finally {
+      setCompiling(false)
+    }
+  }
+
   const handleNoteContext = (e, noteId) => {
     e.preventDefault()
     e.stopPropagation()
@@ -215,25 +242,35 @@ export default function Home() {
   const renderNoteCard = (note) => (
     <div
       key={note.id}
-      onClick={() => navigate(`/notes/${note.id}`)}
+      onClick={() => selectMode ? toggleNoteSelection(note.id) : navigate(`/notes/${note.id}`)}
       onContextMenu={(e) => handleNoteContext(e, note.id)}
-      className="group relative bg-[#111111] border border-[#1c1c1c] rounded-lg p-5 cursor-pointer hover:border-[#2a2a2a] transition-colors"
+      className={`group relative bg-bg-secondary border rounded-lg p-5 cursor-pointer hover:border-border transition-colors ${
+        selectMode && selectedNotes.has(note.id) ? 'border-[#c4a759]' : 'border-border'
+      }`}
     >
-      {/* Delete button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); handleDelete(note.id) }}
-        className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 text-[#333333] hover:text-[#606060] transition-all duration-200 p-1.5 rounded-lg"
-        title="Delete note"
-      >
-        <Trash2 size={14} />
-      </button>
+      {/* Select checkbox or delete button */}
+      {selectMode ? (
+        <div className="absolute top-3 right-3 z-10">
+          {selectedNotes.has(note.id)
+            ? <CheckSquare size={16} className="text-[#c4a759]" />
+            : <Square size={16} className="text-text-muted" />}
+        </div>
+      ) : (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDelete(note.id) }}
+          className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text-secondary transition-all duration-200 p-1.5 rounded-lg"
+          title="Delete note"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
 
       {/* Preview image / Canvas pattern */}
       {note.type === 'canvas' ? (
         <div className="mb-3 -mx-5 -mt-5 rounded-t-lg overflow-hidden">
           <div className="canvas-card-pattern h-24 relative">
             <div className="absolute inset-0 flex items-center justify-center">
-              <PenTool size={20} className="text-[#2a2a2a]" />
+              <PenTool size={20} className="text-text-muted" />
             </div>
           </div>
         </div>
@@ -244,7 +281,7 @@ export default function Home() {
           ) : (
             <div className="canvas-card-pattern h-24 relative">
               <div className="absolute inset-0 flex items-center justify-center">
-                <LayoutGrid size={20} className="text-[#2a2a2a]" />
+                <LayoutGrid size={20} className="text-text-muted" />
               </div>
             </div>
           )}
@@ -260,12 +297,12 @@ export default function Home() {
       ) : null}
 
       {/* Title */}
-      <h3 className="font-semibold text-[#d4d4d4] mb-1.5 truncate pr-6">
+      <h3 className="font-semibold text-text mb-1.5 truncate pr-6">
         {note.title || 'untitled'}
       </h3>
 
       {/* Content preview */}
-      <p className="text-sm text-[#606060] mb-3 line-clamp-3">
+      <p className="text-sm text-text-secondary mb-3 line-clamp-3">
         {note.type === 'canvas' ? 'canvas' : note.type === 'moodboard' ? 'moodboard' : truncate(note.preview)}
       </p>
 
@@ -276,7 +313,7 @@ export default function Home() {
           {(note.tags || []).slice(0, 3).map((tag, i) => (
             <span
               key={i}
-              className="text-xs px-2 py-0.5 rounded bg-[#191919] text-[#606060]"
+              className="text-xs px-2 py-0.5 rounded bg-bg-tertiary text-text-secondary"
             >
               {typeof tag === 'string' ? tag : tag.name}
             </span>
@@ -284,7 +321,7 @@ export default function Home() {
         </div>
 
         {/* Date */}
-        <span className="text-xs text-[#333333] whitespace-nowrap ml-2">
+        <span className="text-xs text-text-muted whitespace-nowrap ml-2">
           {formatDate(note.updated_at)}
         </span>
       </div>
@@ -298,36 +335,66 @@ export default function Home() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-semibold text-text tracking-tight">notes</h1>
           <div className="flex items-center gap-2">
-            <button
-                onClick={() => api.download('/notes/export/markdown-zip')}
-                className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
-                title="Export all notes as zip"
-            >
-                <Download size={16} />
-            </button>
+            {selectMode ? (
+              <>
+                <button
+                  onClick={handleCompileGuide}
+                  disabled={selectedNotes.size < 2 || compiling}
+                  className="bg-[#c4a759] text-[#0a0a0a] hover:bg-[#d4b86a] font-medium rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+                >
+                  {compiling ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full" />
+                  ) : (
+                    <BookOpen size={16} />
+                  )}
+                  {compiling ? 'compiling...' : `compile guide (${selectedNotes.size})`}
+                </button>
+                <button
+                  onClick={() => { setSelectMode(false); setSelectedNotes(new Set()) }}
+                  className="border border-border text-text-secondary hover:text-text hover:border-border rounded-md px-3 py-2 transition-colors text-sm"
+                >
+                  cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setSelectMode(true)}
+                  className="p-2 rounded-md transition-colors text-text-muted hover:text-text-secondary"
+                  title="Select notes for study guide"
+                >
+                  <BookOpen size={16} />
+                </button>
+                <button
+                    onClick={() => api.download('/notes/export/markdown-zip')}
+                    className="p-2 rounded-md transition-colors text-text-muted hover:text-text-secondary"
+                    title="Export all notes as zip"
+                >
+                    <Download size={16} />
+                </button>
             {/* Create dropdown (import, canvas, moodboard) */}
             <div className="relative" ref={createMenuRef}>
               <button
                 onClick={() => setShowCreateMenu(o => !o)}
-                className="text-[#606060] hover:text-[#d4d4d4] border border-[#1c1c1c] hover:border-[#2a2a2a] rounded-md px-3 py-2 transition-colors text-sm flex items-center gap-1.5"
+                className="text-text-secondary hover:text-text border border-border hover:border-border rounded-md px-3 py-2 transition-colors text-sm flex items-center gap-1.5"
               >
                 <Plus size={14} />
                 <ChevronDown size={12} className={`transition-transform duration-150 ${showCreateMenu ? 'rotate-180' : ''}`} />
               </button>
               {showCreateMenu && (
-                <div className="absolute right-0 mt-1 w-48 bg-[#111111] border border-[#1c1c1c] rounded-lg py-1 z-30 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+                <div className="absolute right-0 mt-1 w-48 bg-bg-secondary border border-border rounded-lg py-1 z-30 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
                   <button
                     onClick={() => { setShowImport(true); setShowCreateMenu(false) }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-[#999] hover:text-[#d4d4d4] hover:bg-[#161616] transition-colors rounded-md mx-0"
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-muted hover:text-text hover:bg-bg-secondary transition-colors rounded-md mx-0"
                   >
                     <Upload size={14} />
                     import
                   </button>
-                  <div className="border-t border-[#1c1c1c] my-1 mx-3" />
+                  <div className="border-t border-border my-1 mx-3" />
                   <button
                     onClick={() => { handleNewCanvas(); setShowCreateMenu(false) }}
                     disabled={creating}
-                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-[#999] hover:text-[#d4d4d4] hover:bg-[#161616] transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-muted hover:text-text hover:bg-bg-secondary transition-colors disabled:opacity-50"
                   >
                     <PenTool size={14} />
                     new canvas
@@ -335,19 +402,19 @@ export default function Home() {
                   <button
                     onClick={() => { handleNewMoodboard(); setShowCreateMenu(false) }}
                     disabled={creating}
-                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-[#999] hover:text-[#d4d4d4] hover:bg-[#161616] transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-muted hover:text-text hover:bg-bg-secondary transition-colors disabled:opacity-50"
                   >
                     <LayoutGrid size={14} />
                     new moodboard
                   </button>
-                  <div className="border-t border-[#1c1c1c] my-1 mx-3" />
+                  <div className="border-t border-border my-1 mx-3" />
                   <p className="px-3 pt-1 pb-0.5 text-[9px] uppercase tracking-wider text-[#444]">templates</p>
                   {NOTE_TEMPLATES.map(t => (
                     <button
                       key={t.id}
                       onClick={() => handleNewFromTemplate(t)}
                       disabled={creating}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-[#999] hover:text-[#d4d4d4] hover:bg-[#161616] transition-colors disabled:opacity-50"
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-muted hover:text-text hover:bg-bg-secondary transition-colors disabled:opacity-50"
                     >
                       <FileText size={14} />
                       {t.name}
@@ -368,37 +435,39 @@ export default function Home() {
               )}
               new note
             </button>
+              </>
+            )}
           </div>
         </div>
 
         {/* Search bar */}
         <div className="relative mb-8">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#333333]" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder="search notes..."
-            className="bg-[#111111] border border-[#1c1c1c] rounded-md px-3 py-2 text-sm text-[#d4d4d4] placeholder-[#333333] outline-none focus:border-[#333333] transition-colors w-full pl-10 pr-16"
+            className="bg-bg-secondary border border-border rounded-md px-3 py-2 text-sm text-text placeholder-text-muted outline-none focus:border-text-muted transition-colors w-full pl-10 pr-16"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#333333] bg-[#191919] px-1.5 py-0.5 rounded border border-[#1c1c1c]">⌘K</kbd>
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
         </div>
 
         {/* Loading state */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="animate-pulse bg-[#111111] rounded-lg p-5">
-                <div className="h-5 rounded w-3/4 mb-3 bg-[#191919]" />
-                <div className="h-4 rounded w-full mb-2 bg-[#191919]" />
-                <div className="h-4 rounded w-2/3 bg-[#191919]" />
+              <div key={i} className="animate-pulse bg-bg-secondary rounded-lg p-5">
+                <div className="h-5 rounded w-3/4 mb-3 bg-bg-tertiary" />
+                <div className="h-4 rounded w-full mb-2 bg-bg-tertiary" />
+                <div className="h-4 rounded w-2/3 bg-bg-tertiary" />
               </div>
             ))}
           </div>
         ) : notes.length === 0 ? (
           /* Empty state */
           <div className="text-center py-24 animate-fade-in">
-            <p className="text-[#606060] mb-6">
+            <p className="text-text-secondary mb-6">
               {search ? 'no notes found.' : 'no notes yet.'}
             </p>
             {!search && (
@@ -417,25 +486,28 @@ export default function Home() {
             {/* Folders */}
             {activeFolders.map((folder) => (
               <div key={folder.id} className="group/folder">
-                <button
+                <div
                   onClick={() => toggleFolder(folder.id)}
-                  className="flex items-center gap-2 mb-3 px-1 w-full text-left group/btn"
+                  className="flex items-center gap-2 mb-3 px-1 w-full text-left group/btn cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFolder(folder.id) } }}
                 >
                   <ChevronRight
                     size={14}
-                    className={`text-[#333333] transition-transform duration-200 ${expandedFolders[folder.id] ? 'rotate-90' : ''}`}
+                    className={`text-text-muted transition-transform duration-200 ${expandedFolders[folder.id] ? 'rotate-90' : ''}`}
                   />
-                  <Folder size={15} className="text-[#606060]" />
-                  <span className="text-sm font-medium text-[#d4d4d4]">{folder.name}</span>
-                  <span className="text-xs text-[#333333] ml-1">{folderNotes[folder.id]?.length || 0}</span>
+                  <Folder size={15} className="text-text-secondary" />
+                  <span className="text-sm font-medium text-text">{folder.name}</span>
+                  <span className="text-xs text-text-muted ml-1">{folderNotes[folder.id]?.length || 0}</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
-                    className="ml-auto opacity-0 group-hover/folder:opacity-100 text-[#333333] hover:text-[#606060] transition-all p-1 rounded"
+                    className="ml-auto opacity-0 group-hover/folder:opacity-100 text-text-muted hover:text-text-secondary transition-all p-1 rounded"
                     title="Delete folder"
                   >
                     <Trash2 size={12} />
                   </button>
-                </button>
+                </div>
                 {expandedFolders[folder.id] && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-7 stagger-in">
                     {(folderNotes[folder.id] || []).map(renderNoteCard)}
@@ -449,7 +521,7 @@ export default function Home() {
               <div>
                 {activeFolders.length > 0 && (
                   <div className="flex items-center gap-2 mb-3 px-1">
-                    <span className="text-xs text-[#333333] uppercase tracking-wider">notes</span>
+                    <span className="text-xs text-text-muted uppercase tracking-wider">notes</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-in">

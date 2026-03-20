@@ -22,7 +22,7 @@ class Folder(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folders.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
@@ -33,7 +33,7 @@ class Tag(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
 
 class DocumentLink(Base):
@@ -54,13 +54,13 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(500), default="Untitled")
     content: Mapped[str] = mapped_column(Text, default="")
     type: Mapped[str] = mapped_column(String(20), default="text")
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folders.id"), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folders.id"), nullable=True, index=True)
     preview_image_url: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     share_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
-    deleted: Mapped[bool] = mapped_column(default=False)
+    deleted: Mapped[bool] = mapped_column(default=False, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    created_at: Mapped[datetime] = mapped_column(default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
     tags: Mapped[list[Tag]] = relationship(secondary=document_tags, lazy="selectin")
 

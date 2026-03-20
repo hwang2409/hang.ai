@@ -32,6 +32,7 @@ async def init_db() -> None:
     import app.studyplan.models  # noqa: F401
     import app.lookups.models  # noqa: F401
     import app.quizzes.models  # noqa: F401
+    import app.integrations.models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA journal_mode=WAL"))

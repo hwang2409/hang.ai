@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Shuffle } from 'lucide-react'
 import { api } from '../lib/api'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+
+function shuffleArray(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 export default function FlashcardStudy() {
   const navigate = useNavigate()
@@ -13,13 +22,14 @@ export default function FlashcardStudy() {
   const [sessionComplete, setSessionComplete] = useState(false)
   const [reviewed, setReviewed] = useState(0)
   const [ratings, setRatings] = useState({ again: 0, hard: 0, good: 0, easy: 0 })
+  const [interleaved, setInterleaved] = useState(true)
 
   useEffect(() => {
     const fetchDue = async () => {
       try {
         const data = await api.get('/flashcards/due')
         const cardList = Array.isArray(data) ? data : data.results || []
-        setCards(cardList)
+        setCards(interleaved ? shuffleArray(cardList) : cardList)
         if (cardList.length === 0) setSessionComplete(true)
       } catch (err) {
         console.error('Failed to fetch due cards:', err)
@@ -28,6 +38,7 @@ export default function FlashcardStudy() {
       }
     }
     fetchDue()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const currentCard = cards[currentIndex]
@@ -81,8 +92,8 @@ export default function FlashcardStudy() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
-        <div className="animate-spin h-8 w-8 border-4 border-[#333333] border-t-transparent rounded-full" />
+      <div className="flex items-center justify-center h-screen bg-bg">
+        <div className="animate-spin h-8 w-8 border-4 border-text-muted border-t-transparent rounded-full" />
       </div>
     )
   }
@@ -90,22 +101,22 @@ export default function FlashcardStudy() {
   // Session complete
   if (sessionComplete) {
     return (
-      <div className="flex items-center justify-center h-screen p-4 bg-[#0a0a0a]">
+      <div className="flex items-center justify-center h-screen p-4 bg-bg">
         <div className="text-center max-w-md w-full animate-fade-in">
-          <h1 className="text-2xl font-light text-[#d4d4d4] mb-4">done.</h1>
-          <p className="text-[#606060] mb-8">
+          <h1 className="text-2xl font-light text-text mb-4">done.</h1>
+          <p className="text-text-secondary mb-8">
             {reviewed === 0 ? 'no cards were due for review.' : `reviewed ${reviewed} card${reviewed !== 1 ? 's' : ''}.`}
           </p>
 
           {reviewed > 0 && (
-            <p className="text-[#333333] mb-10 font-mono text-sm">
+            <p className="text-text-muted mb-10 font-mono text-sm">
               again: {ratings.again} &nbsp; hard: {ratings.hard} &nbsp; good: {ratings.good} &nbsp; easy: {ratings.easy}
             </p>
           )}
 
           <button
             onClick={() => navigate('/flashcards')}
-            className="border border-[#1c1c1c] text-[#606060] hover:text-[#d4d4d4] hover:border-[#2a2a2a] rounded-md px-4 py-2 transition-colors text-sm inline-flex items-center gap-2"
+            className="border border-border text-text-secondary hover:text-text hover:border-border rounded-md px-4 py-2 transition-colors text-sm inline-flex items-center gap-2"
           >
             <ArrowLeft size={16} />
             back to flashcards
@@ -118,24 +129,34 @@ export default function FlashcardStudy() {
   const progress = cards.length > 0 ? ((currentIndex) / cards.length) * 100 : 0
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0a0a]">
+    <div className="flex flex-col h-screen bg-bg">
       {/* Header */}
       <div className="flex items-center gap-4 p-4 flex-shrink-0">
         <button
           onClick={() => navigate('/flashcards')}
-          className="text-[#333333] hover:text-[#606060] transition-colors duration-200 p-1"
+          className="text-text-muted hover:text-text-secondary transition-colors duration-200 p-1"
         >
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1">
-          <div className="h-1 rounded-full overflow-hidden bg-[#111111]">
+          <div className="h-1 rounded-full overflow-hidden bg-bg-secondary">
             <div
-              className="h-full rounded-full transition-all duration-500 bg-[#d4d4d4]"
+              className="h-full rounded-full transition-all duration-500 bg-primary"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        <span className="text-xs text-[#333333] whitespace-nowrap font-mono">
+        <button
+          onClick={() => {
+            setInterleaved(v => !v)
+            setCards(prev => interleaved ? [...prev].sort((a, b) => new Date(a.next_review) - new Date(b.next_review)) : shuffleArray(prev))
+          }}
+          className={`p-1.5 rounded-md transition-colors ${interleaved ? 'text-[#c4a759]' : 'text-text-muted hover:text-text-secondary'}`}
+          title={interleaved ? 'interleaved (shuffled)' : 'sequential (by due date)'}
+        >
+          <Shuffle size={14} />
+        </button>
+        <span className="text-xs text-text-muted whitespace-nowrap font-mono">
           {currentIndex + 1} / {cards.length}
         </span>
       </div>
@@ -157,28 +178,28 @@ export default function FlashcardStudy() {
           >
             {/* Front */}
             <div
-              className="absolute inset-0 bg-[#111111] border border-[#1c1c1c] rounded-lg p-10 flex flex-col items-center justify-center"
+              className="absolute inset-0 bg-bg-secondary border border-border rounded-lg p-10 flex flex-col items-center justify-center"
               style={{ backfaceVisibility: 'hidden' }}
             >
-              <div className="text-xs text-[#333333] uppercase tracking-widest mb-6 font-mono">question</div>
-              <p className="text-lg text-[#d4d4d4] text-center font-light leading-relaxed">
+              <div className="text-xs text-text-muted uppercase tracking-widest mb-6 font-mono">question</div>
+              <p className="text-lg text-text text-center font-light leading-relaxed">
                 {currentCard?.front}
               </p>
-              <div className="mt-10 text-xs text-[#333333]">
+              <div className="mt-10 text-xs text-text-muted">
                 press space to reveal
               </div>
             </div>
 
             {/* Back */}
             <div
-              className="absolute inset-0 bg-[#111111] border border-[#1c1c1c] rounded-lg p-10 flex flex-col items-center justify-center overflow-y-auto"
+              className="absolute inset-0 bg-bg-secondary border border-border rounded-lg p-10 flex flex-col items-center justify-center overflow-y-auto"
               style={{
                 backfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)',
               }}
             >
-              <div className="text-xs text-[#333333] uppercase tracking-widest mb-6 font-mono">answer</div>
-              <div className="text-[#d4d4d4] text-center w-full">
+              <div className="text-xs text-text-muted uppercase tracking-widest mb-6 font-mono">answer</div>
+              <div className="text-text text-center w-full">
                 <MarkdownRenderer content={currentCard?.back || ''} />
               </div>
             </div>
@@ -191,31 +212,31 @@ export default function FlashcardStudy() {
         <div className="flex items-center justify-center gap-3 p-6 flex-shrink-0 animate-fade-in">
           <button
             onClick={() => handleRate(0)}
-            className="flex flex-col items-center gap-1 border border-[#1c1c1c] rounded-md px-6 py-3 text-sm transition-colors hover:border-[#2a2a2a] hover:text-[#d4d4d4] text-[#606060] min-w-[80px]"
+            className="flex flex-col items-center gap-1 border border-border rounded-md px-6 py-3 text-sm transition-colors hover:border-border hover:text-text text-text-secondary min-w-[80px] focus:outline-none focus-visible:ring-1 focus-visible:ring-border"
           >
             <span className="text-sm">again</span>
-            <span className="text-xs text-[#333333] font-mono">1</span>
+            <span className="text-xs text-text-muted font-mono">1</span>
           </button>
           <button
             onClick={() => handleRate(2)}
-            className="flex flex-col items-center gap-1 border border-[#1c1c1c] rounded-md px-6 py-3 text-sm transition-colors hover:border-[#2a2a2a] hover:text-[#d4d4d4] text-[#606060] min-w-[80px]"
+            className="flex flex-col items-center gap-1 border border-border rounded-md px-6 py-3 text-sm transition-colors hover:border-border hover:text-text text-text-secondary min-w-[80px] focus:outline-none focus-visible:ring-1 focus-visible:ring-border"
           >
             <span className="text-sm">hard</span>
-            <span className="text-xs text-[#333333] font-mono">2</span>
+            <span className="text-xs text-text-muted font-mono">2</span>
           </button>
           <button
             onClick={() => handleRate(4)}
-            className="flex flex-col items-center gap-1 border border-[#1c1c1c] rounded-md px-6 py-3 text-sm transition-colors hover:border-[#2a2a2a] hover:text-[#d4d4d4] text-[#606060] min-w-[80px]"
+            className="flex flex-col items-center gap-1 border border-border rounded-md px-6 py-3 text-sm transition-colors hover:border-border hover:text-text text-text-secondary min-w-[80px] focus:outline-none focus-visible:ring-1 focus-visible:ring-border"
           >
             <span className="text-sm">good</span>
-            <span className="text-xs text-[#333333] font-mono">3</span>
+            <span className="text-xs text-text-muted font-mono">3</span>
           </button>
           <button
             onClick={() => handleRate(5)}
-            className="flex flex-col items-center gap-1 border border-[#1c1c1c] rounded-md px-6 py-3 text-sm transition-colors hover:border-[#2a2a2a] hover:text-[#d4d4d4] text-[#606060] min-w-[80px]"
+            className="flex flex-col items-center gap-1 border border-border rounded-md px-6 py-3 text-sm transition-colors hover:border-border hover:text-text text-text-secondary min-w-[80px] focus:outline-none focus-visible:ring-1 focus-visible:ring-border"
           >
             <span className="text-sm">easy</span>
-            <span className="text-xs text-[#333333] font-mono">4</span>
+            <span className="text-xs text-text-muted font-mono">4</span>
           </button>
         </div>
       )}

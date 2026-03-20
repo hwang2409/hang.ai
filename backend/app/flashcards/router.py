@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from starlette.responses import FileResponse
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,7 @@ from app.flashcards.schemas import (
     WeakSpotGroup,
     WeakSpotsResponse,
 )
+from app.cache import cache_delete_pattern
 from app.flashcards.dedup import (
     find_exact_duplicate,
     find_exact_duplicates_batch,
@@ -36,6 +37,7 @@ from app.flashcards.dedup import (
 from app.flashcards.sm2 import apply_sm2
 from app.llm.service import evaluate_text
 from app.llm.response_parser import parse_llm_json
+from app.rate_limit import limiter
 
 router = APIRouter()
 
@@ -331,6 +333,7 @@ async def delete_flashcard(
 async def review_flashcard(
     card_id: int,
     body: ReviewRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -348,11 +351,55 @@ async def review_flashcard(
     db.add(FlashcardReview(card_id=card_id, user_id=current_user.id, quality=body.quality))
     await db.commit()
     await db.refresh(card)
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    # Fire webhook + gcal sync for flashcard due counts
+    _uid = current_user.id
+    async def _check_and_fire():
+        from datetime import date, timedelta
+        from app.database import async_session
+        from app.integrations.webhook import fire_webhooks_for_user
+        from app.integrations.google_calendar import sync_flashcard_batch_to_gcal
+        async with async_session() as s:
+            now = datetime.now(timezone.utc)
+            due_result = await s.execute(
+                select(sa_func.count(Flashcard.id)).where(
+                    Flashcard.user_id == _uid,
+                    Flashcard.next_review <= now,
+                )
+            )
+            due_count = due_result.scalar() or 0
+            if due_count > 0:
+                await fire_webhooks_for_user(
+                    _uid, "flashcard_due",
+                    {"count": due_count}, s,
+                )
+
+            # Sync flashcard batch counts to Google Calendar for next 7 days
+            today = date.today()
+            for day_offset in range(7):
+                check_date = today + timedelta(days=day_offset)
+                day_start = datetime(check_date.year, check_date.month, check_date.day, tzinfo=timezone.utc)
+                day_end = day_start + timedelta(days=1)
+                count_result = await s.execute(
+                    select(sa_func.count(Flashcard.id)).where(
+                        Flashcard.user_id == _uid,
+                        Flashcard.next_review >= day_start,
+                        Flashcard.next_review < day_end,
+                    )
+                )
+                count = count_result.scalar() or 0
+                await sync_flashcard_batch_to_gcal(_uid, check_date, count, s)
+
+    background_tasks.add_task(_check_and_fire)
+
     return card
 
 
+@limiter.limit("15/minute")
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_flashcards(
+    request: Request,
     body: GenerateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -46,7 +46,7 @@ export default function FileView() {
   const fileId = parseInt(id, 10)
 
   const {
-    messages, streaming, threadId, sendMessage, resetChat, setThreadId,
+    messages, streaming, sendMessage, setThreadId,
   } = useChat({ fileId })
 
   // Load file metadata
@@ -100,7 +100,7 @@ export default function FileView() {
             setTranscriptText(data.text)
             clearInterval(interval)
           }
-        } catch {}
+        } catch { /* polling error ignored */ }
       }, 5000)
       return () => clearInterval(interval)
     }
@@ -131,7 +131,7 @@ export default function FileView() {
             content: m.content,
           })))
         }
-      } catch (err) {
+      } catch {
         // Ignore — no prior chat
       }
     }
@@ -144,7 +144,7 @@ export default function FileView() {
       try {
         const data = await api.get(`/file-annotations?file_id=${fileId}`)
         setAnnotations(data)
-      } catch (err) {
+      } catch {
         // Ignore — no annotations yet
       }
     }
@@ -292,7 +292,6 @@ export default function FileView() {
   const isLink = file?.file_type === 'link'
   const linkDomain = file?.metadata?.domain || ''
   const isYouTubeLink = isLink && (linkDomain.includes('youtube') || file?.source_url?.includes('youtu.be'))
-  const isArxivLink = isLink && linkDomain.includes('arxiv')
   const hasLinkPdf = isLink && file?.metadata?.pdf_url
   const youtubeEmbedUrl = isYouTubeLink && file?.metadata?.video_id
     ? `https://www.youtube.com/embed/${file.metadata.video_id}`

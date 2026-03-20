@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
 import { useTheme } from './ThemeContext'
 
@@ -9,11 +9,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const { setThemeFromProfile } = useTheme()
 
-  const syncTheme = (userData) => {
+  const syncTheme = useCallback((userData) => {
     if (userData?.theme) {
       setThemeFromProfile(userData.theme)
     }
-  }
+  }, [setThemeFromProfile])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -25,9 +25,9 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('token')
       }).finally(() => setLoading(false))
     } else {
-      setLoading(false)
+      requestAnimationFrame(() => setLoading(false))
     }
-  }, [])
+  }, [syncTheme])
 
   const login = async (email, password) => {
     const data = await api.post('/auth/login', { email, password })
@@ -65,4 +65,5 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)

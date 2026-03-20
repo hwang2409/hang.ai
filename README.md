@@ -69,7 +69,7 @@ docker compose -f docker-compose.searxng.yml up -d
 
 Runs SearXNG on port 8888 for the "research" selection action.
 
-## Features (106/122 implemented)
+## Features (111/122 implemented)
 
 See [STUDY.md](STUDY.md) for the full feature matrix with implementation status.
 
@@ -79,17 +79,17 @@ See [STUDY.md](STUDY.md) for the full feature matrix with implementation status.
 - **File library** — PDF viewer, image viewer, video player, audio player with transcription
 - **Voice recording** — Record audio in-browser, auto-transcribe via Whisper, convert to notes
 - **AI chat** — Streaming responses with tool use, per-note and per-file context
-- **Flashcards** — SM2 spaced repetition, keyboard-driven study (Space to flip, 1-4 to rate)
-- **Quizzes** — AI-generated from notes, timed attempts, score history
-- **Feynman technique** — Explain concepts in your own words, AI scores your understanding
+- **Flashcards** — SM2 spaced repetition, keyboard-driven study (Space to flip, 1-4 to rate), interleaved practice
+- **Quizzes** — AI-generated from notes, timed attempts, score history, exam simulation mode
+- **Feynman technique** — Explain concepts in your own words, AI scores your understanding, practice problems
 - **Socratic mode** — AI probes your understanding through adaptive questions, then evaluates
 - **Annotations** — Text highlights with colors, PDF page annotations, video/audio timestamp annotations
 - **Wiki links** — `[[Note Title]]` with autocomplete, bidirectional links, knowledge graph
 - **Smart connections** — AI-powered note suggestions based on semantic similarity
 - **Search** — Cmd+K global search, semantic + keyword hybrid ranking
 - **Study plans** — Paste a syllabus, get a week-by-week study plan with auto-created todos
-- **Dashboard** — Daily brief, activity heatmap, weak areas, stale notes, performance trends
-- **Export** — PDF export, Anki deck export, markdown zip
+- **Dashboard** — Daily brief, activity heatmap, weak areas, stale notes, performance trends, topic mastery visualization
+- **Export** — PDF export, Anki deck export, markdown zip, study guide compilation
 - **Personalization** — Dark/light theme, Vim mode, configurable Pomodoro, font size, default note type
 
 ## Keyboard shortcuts

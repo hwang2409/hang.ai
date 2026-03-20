@@ -1,7 +1,24 @@
-GENERAL_CHAT_SYSTEM = (
-    "You are a helpful AI study assistant for the Hang.ai learning platform. "
-    "Help students research topics, answer questions, and learn effectively. "
-    "Be thorough but concise. Use markdown formatting for clarity."
+# ── Voice & tone ──────────────────────────────────────────────────────
+# Prepended to every system prompt so the LLM sounds like a person, not a bot.
+VOICE = (
+    "You are a study assistant on Hang. "
+    "Write like a sharp friend who happens to know the subject well — "
+    "casual, direct, no filler. Use lowercase naturally. "
+    "Never use emojis, never use exclamation marks, and never start with 'Great question!' or similar. "
+    "Don't narrate what you're about to do — just do it. "
+    "Skip pleasantries, hedging, and unnecessary transitions. "
+    "Use markdown only when it genuinely helps (code blocks, lists, math). "
+    "Keep answers as short as the question deserves — a one-line question gets a one-line answer."
+)
+
+
+def _sys(extra: str) -> str:
+    """Combine voice directive with context-specific instructions."""
+    return f"{VOICE}\n\n{extra}"
+
+
+GENERAL_CHAT_SYSTEM = _sys(
+    "Help the user research topics, answer questions, and study effectively."
 )
 
 TASK_PROMPTS = {
@@ -19,8 +36,7 @@ SELECTION_ACTION_PROMPTS = {
 
 
 def build_canvas_system_prompt(text_summary: str, selected_text: str | None = None) -> str:
-    prompt = (
-        "You are a helpful AI study assistant for the Hang.ai learning platform. "
+    prompt = _sys(
         "The user is studying a visual canvas (whiteboard). "
         "Below is the text extracted from the canvas, and any embedded images are attached.\n\n"
         f"{text_summary}\n\n"
@@ -47,8 +63,7 @@ def build_canvas_system_prompt(text_summary: str, selected_text: str | None = No
 
 
 def build_moodboard_system_prompt(items_summary: str, selected_text: str | None = None) -> str:
-    prompt = (
-        "You are a helpful AI study assistant for the Hang.ai learning platform. "
+    prompt = _sys(
         "The user is building a visual moodboard — a Pinterest-style collection of images and text cards for studying.\n\n"
         f"Current moodboard items:\n{items_summary}\n\n"
         "You can edit the moodboard using the edit_moodboard tool. Available operations:\n"
@@ -84,8 +99,7 @@ def build_file_system_prompt(
 ) -> str:
     # Truncate to ~80k chars like converter.py
     text = extracted_text[:80000] if extracted_text else "(no text extracted)"
-    prompt = (
-        "You are a helpful AI study assistant for the Hang.ai learning platform. "
+    prompt = _sys(
         f"The user is viewing a {file_type} file: \"{original_name}\".\n\n"
         f"Here is the text content extracted from the file:\n\n{text}\n\n"
     )
@@ -93,8 +107,7 @@ def build_file_system_prompt(
         prompt += "Note: The text includes `--- Page N ---` markers indicating page boundaries.\n\n"
     prompt += (
         "Help the user understand the file content, answer questions about it, "
-        "and assist with studying the material. Be thorough but concise. "
-        "Use markdown formatting for clarity."
+        "and study the material."
     )
     if selected_text:
         prompt += f'\n\nThe user has selected this passage to focus on:\n"{selected_text}"'
@@ -102,9 +115,7 @@ def build_file_system_prompt(
 
 
 def build_note_system_prompt(note_content: str, selected_text: str | None = None) -> str:
-    prompt = (
-        "You are a helpful AI study assistant for the Hang.ai learning platform. "
-        "Help students understand concepts, improve their notes, and learn effectively.\n\n"
+    prompt = _sys(
         f"The user is studying the following note:\n\n{note_content}\n\n"
         "You have the ability to directly edit the user's note using the edit_note tool. "
         "When the user asks you to add, modify, or update content in their note, "

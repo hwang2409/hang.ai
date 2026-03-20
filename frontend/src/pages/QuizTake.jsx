@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, X as XIcon, ArrowRight, RotateCcw } from 'lucide-react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Check, X as XIcon, ArrowRight, RotateCcw, Shield } from 'lucide-react'
 import { api } from '../lib/api'
 
 export default function QuizTake() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const examMode = searchParams.get('mode') === 'exam'
   const [quiz, setQuiz] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -50,14 +52,37 @@ export default function QuizTake() {
   const handleAnswer = useCallback((answer) => {
     if (feedback || !currentQuestion) return
 
-    const isCorrect = gradeAnswer(currentQuestion, answer)
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: answer }))
-    setFeedback({
-      isCorrect,
-      correctAnswer: currentQuestion.correct_answer,
-      explanation: currentQuestion.explanation,
-    })
-  }, [feedback, currentQuestion])
+
+    if (examMode) {
+      // Exam mode: no feedback, auto-advance
+      setFillInput('')
+      if (currentIndex + 1 < totalQuestions) {
+        setCurrentIndex((prev) => prev + 1)
+      } else {
+        // Submit immediately
+        clearInterval(timerRef.current)
+        setSubmitting(true)
+        const allAnswers = { ...answers, [currentQuestion.id]: answer }
+        const answerList = Object.entries(allAnswers).map(([questionId, userAnswer]) => ({
+          question_id: parseInt(questionId),
+          user_answer: userAnswer,
+        }))
+        api.post('/quizzes/submit', {
+          quiz_id: quiz.id,
+          answers: answerList,
+          time_seconds: seconds,
+        }).then(setResults).catch(err => console.error('Failed to submit quiz:', err)).finally(() => setSubmitting(false))
+      }
+    } else {
+      const isCorrect = gradeAnswer(currentQuestion, answer)
+      setFeedback({
+        isCorrect,
+        correctAnswer: currentQuestion.correct_answer,
+        explanation: currentQuestion.explanation,
+      })
+    }
+  }, [feedback, currentQuestion, examMode, currentIndex, totalQuestions, answers, quiz, seconds])
 
   const handleNext = useCallback(async () => {
     setFeedback(null)
@@ -93,14 +118,17 @@ export default function QuizTake() {
     const handleKeyDown = (e) => {
       if (!currentQuestion) return
 
-      if (feedback) {
-        // After answering, Enter or Space goes to next
+      // In exam mode, don't wait for feedback — answer already advances
+      if (feedback && !examMode) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           handleNext()
         }
         return
       }
+
+      // Don't allow re-answering in non-exam mode if already answered
+      if (answers[currentQuestion.id] && !examMode) return
 
       if (currentQuestion.question_type === 'multiple_choice') {
         if (e.key === '1' && currentQuestion.options[0]) handleAnswer(currentQuestion.options[0])
@@ -117,7 +145,7 @@ export default function QuizTake() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [feedback, currentQuestion, handleAnswer, handleNext])
+  }, [feedback, currentQuestion, handleAnswer, handleNext, examMode, answers])
 
   const formatTimer = (s) => {
     const m = Math.floor(s / 60)
@@ -171,8 +199,28 @@ export default function QuizTake() {
               <p className="text-[#333333] text-xs mt-2">time: {formatTimer(results.time_seconds)}</p>
             </div>
 
-            {/* Wrong answers review */}
-            {wrongAnswers.length > 0 && (
+            {/* Full review in exam mode, wrong answers only in standard mode */}
+            {examMode ? (
+              <div className="space-y-3 mb-8">
+                <h3 className="text-sm font-semibold text-[#d4d4d4]">full review</h3>
+                {results.results.map((r) => (
+                  <div key={r.question_id} className={`bg-[#111111] border rounded-lg p-4 ${r.is_correct ? 'border-green-500/20' : 'border-red-500/20'}`}>
+                    <p className="text-sm text-[#d4d4d4] mb-2">{r.question_text}</p>
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span className={r.is_correct ? 'text-green-400' : 'text-red-400'}>
+                        your answer: {r.user_answer} {r.is_correct ? '✓' : '✗'}
+                      </span>
+                      {!r.is_correct && (
+                        <span className="text-green-400">correct: {r.correct_answer}</span>
+                      )}
+                      {r.explanation && (
+                        <span className="text-[#606060] mt-1">{r.explanation}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : wrongAnswers.length > 0 ? (
               <div className="space-y-3 mb-8">
                 <h3 className="text-sm font-semibold text-[#d4d4d4]">review wrong answers</h3>
                 {wrongAnswers.map((r) => (
@@ -188,7 +236,7 @@ export default function QuizTake() {
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
 
             {/* Actions */}
             <div className="flex items-center justify-center gap-3">
@@ -239,6 +287,12 @@ export default function QuizTake() {
             />
           </div>
         </div>
+        {examMode && (
+          <span className="text-[10px] uppercase tracking-wider text-[#c4a759] flex items-center gap-1">
+            <Shield size={10} />
+            exam
+          </span>
+        )}
         <span className="text-xs text-[#333333] whitespace-nowrap font-mono">
           {currentIndex + 1} / {totalQuestions}
         </span>
@@ -267,8 +321,8 @@ export default function QuizTake() {
             <div className="space-y-3">
               {currentQuestion.options.map((option, i) => {
                 const isSelected = answers[currentQuestion.id] === option
-                const isCorrect = feedback && option === feedback.correctAnswer
-                const isWrong = feedback && isSelected && !feedback.isCorrect
+                const isCorrect = !examMode && feedback && option === feedback.correctAnswer
+                const isWrong = !examMode && feedback && isSelected && !feedback.isCorrect
 
                 let borderClass = 'border-[#1c1c1c]'
                 let textClass = 'text-[#d4d4d4]'
@@ -279,9 +333,9 @@ export default function QuizTake() {
                   <button
                     key={i}
                     onClick={() => handleAnswer(option)}
-                    disabled={!!feedback}
+                    disabled={!!feedback && !examMode}
                     className={`w-full border ${borderClass} rounded-lg p-4 text-left text-sm ${textClass} transition-colors ${
-                      !feedback ? 'hover:border-[#2a2a2a] hover:text-white' : ''
+                      !feedback || examMode ? 'hover:border-[#2a2a2a] hover:text-white' : ''
                     } flex items-center gap-3`}
                   >
                     <span className="text-xs font-mono text-[#333333] flex-shrink-0">{i + 1}</span>
@@ -299,8 +353,8 @@ export default function QuizTake() {
             <div className="flex gap-4 justify-center">
               {['True', 'False'].map((option) => {
                 const isSelected = answers[currentQuestion.id] === option
-                const isCorrect = feedback && option === feedback.correctAnswer
-                const isWrong = feedback && isSelected && !feedback.isCorrect
+                const isCorrect = !examMode && feedback && option === feedback.correctAnswer
+                const isWrong = !examMode && feedback && isSelected && !feedback.isCorrect
 
                 let borderClass = 'border-[#1c1c1c]'
                 let textClass = 'text-[#d4d4d4]'
@@ -311,9 +365,9 @@ export default function QuizTake() {
                   <button
                     key={option}
                     onClick={() => handleAnswer(option)}
-                    disabled={!!feedback}
+                    disabled={!!feedback && !examMode}
                     className={`border ${borderClass} rounded-lg px-8 py-4 text-sm ${textClass} transition-colors ${
-                      !feedback ? 'hover:border-[#2a2a2a] hover:text-white' : ''
+                      !feedback || examMode ? 'hover:border-[#2a2a2a] hover:text-white' : ''
                     } flex items-center gap-2 min-w-[120px] justify-center`}
                   >
                     <span className="text-xs font-mono text-[#333333]">{option[0]}</span>
@@ -354,7 +408,7 @@ export default function QuizTake() {
           )}
 
           {/* Fill blank feedback display */}
-          {currentQuestion?.question_type === 'fill_blank' && feedback && (
+          {currentQuestion?.question_type === 'fill_blank' && feedback && !examMode && (
             <div className="max-w-md mx-auto">
               <div className={`border ${feedback.isCorrect ? 'border-green-500/50' : 'border-red-500/50'} rounded-lg p-4 text-center`}>
                 <p className={`text-sm ${feedback.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
@@ -368,7 +422,7 @@ export default function QuizTake() {
           )}
 
           {/* Feedback */}
-          {feedback && (
+          {feedback && !examMode && (
             <div className="mt-6 text-center animate-fade-in">
               {feedback.explanation && (
                 <p className="text-sm text-[#606060] mb-4">{feedback.explanation}</p>
@@ -379,7 +433,7 @@ export default function QuizTake() {
       </div>
 
       {/* Next button */}
-      {feedback && (
+      {feedback && !examMode && (
         <div className="flex items-center justify-center p-6 flex-shrink-0 animate-fade-in">
           <button
             onClick={handleNext}

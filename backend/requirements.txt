@@ -18,3 +18,11 @@ xhtml2pdf
 matplotlib
 genanki
 openai
+icalendar
+google-api-python-client
+google-auth
+google-auth-oauthlib
+pyyaml
+redis[hiredis]
+celery[redis]
+slowapi

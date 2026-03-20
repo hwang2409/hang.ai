@@ -2,7 +2,7 @@ import json
 import logging
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
@@ -30,6 +30,7 @@ from app.llm.prompts import (
 )
 from app.llm.canvas import parse_canvas_content
 from app.files.models import UploadedFile
+from app.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +73,10 @@ async def _execute_tools_and_collect(tool_calls, db, note_id):
     return tool_results, sse_events
 
 
+@limiter.limit("20/minute")
 @router.post("/chat")
 async def chat(
+    request: Request,
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -313,8 +316,10 @@ async def delete_thread(
 # ── One-shot evaluation endpoints ─────────────────────────────────────────────
 
 
+@limiter.limit("20/minute")
 @router.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate(
+    request: Request,
     body: EvaluateRequest,
     current_user: User = Depends(get_current_user),
 ):
@@ -326,8 +331,10 @@ async def evaluate(
     return EvaluateResponse(result=result)
 
 
+@limiter.limit("20/minute")
 @router.post("/selection-action", response_model=SelectionActionResponse)
 async def selection_action(
+    request: Request,
     body: SelectionActionRequest,
     current_user: User = Depends(get_current_user),
 ):
@@ -338,7 +345,8 @@ async def selection_action(
         )
 
     prompt = SELECTION_ACTION_PROMPTS[body.action].format(text=body.selected_text)
-    system = "You are a helpful AI study assistant. Be concise and clear."
+    from app.llm.prompts import VOICE
+    system = VOICE
     if body.note_context:
         system += f"\n\nThis passage comes from a larger document:\n{body.note_context[:2000]}"
 

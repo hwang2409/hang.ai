@@ -1,12 +1,13 @@
 import json
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_current_user
 from app.auth.models import User
+from app.cache import cache_delete_pattern
 from app.studyplan.models import StudyPlan, StudyPlanItem
 from app.studyplan.schemas import (
     StudyPlanGenerate,
@@ -38,6 +39,7 @@ def _parse_llm_json(raw: str) -> dict:
 @router.post("/generate", response_model=StudyPlanResponse, status_code=201)
 async def generate_study_plan(
     body: StudyPlanGenerate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -123,6 +125,11 @@ Rules:
     await db.refresh(plan)
     for item in items:
         await db.refresh(item)
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    # Sync all new items to Google Calendar
+    from app.task_dispatch import dispatch_gcal_full_sync
+    dispatch_gcal_full_sync(current_user.id, background_tasks)
 
     return StudyPlanResponse(
         id=plan.id,
@@ -223,6 +230,7 @@ async def update_study_plan_item(
     plan_id: int,
     item_id: int,
     body: StudyPlanItemUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -262,6 +270,11 @@ async def update_study_plan_item(
 
     await db.commit()
     await db.refresh(item)
+    await cache_delete_pattern(f"dashboard:*:{current_user.id}")
+
+    from app.task_dispatch import dispatch_gcal_studyplan_item_sync
+    dispatch_gcal_studyplan_item_sync(item.id, item.topic, item.date, item.description, item.completed, current_user.id, background_tasks)
+
     return item
 
 

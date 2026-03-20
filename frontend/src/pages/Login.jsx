@@ -30,7 +30,7 @@ export default function Login() {
         {/* Brand */}
         <div className="mb-8">
           <h1 className="text-2xl font-light tracking-tight text-text">
-            hang.
+            hang v1
           </h1>
           <p className="text-xs uppercase tracking-[0.15em] text-text-secondary mt-2">
             sign in

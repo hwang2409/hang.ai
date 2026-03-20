@@ -81,9 +81,9 @@ Most notes apps only store information. The best one should help users:
 | AI study plan from syllabus | ✅ |
 | Quizzes (multiple choice, fill-blank, true/false) | ✅ |
 | Cheat sheet / reference card generation | ✅ |
-| Practice problem generation (open-ended with step checking) | ⬜ |
+| Practice problem generation (open-ended with step checking) | ✅ |
 | Outline generation from long notes | ✅ |
-| Study guide compilation across multiple notes | ⬜ |
+| Study guide compilation across multiple notes | ✅ |
 
 ---
 
@@ -99,7 +99,7 @@ Most notes apps only store information. The best one should help users:
 | Keyboard-driven study (Space, 1-4) | ✅ |
 | Quiz attempt history + score tracking | ✅ |
 | Spaced repetition for quizzes (re-serve weak-topic quizzes at intervals) | ⬜ |
-| Interleaved practice (mix topics in review sessions) | ⬜ |
+| Interleaved practice (mix topics in review sessions) | ✅ |
 | Forgetting curve visualization per topic | ⬜ |
 
 ---
@@ -173,7 +173,7 @@ Most notes apps only store information. The best one should help users:
 | Dashboard with daily review | ✅ |
 | Daily study brief ("here's your plan for today") | ✅ |
 | "Study this next" recommendations based on weak areas + deadlines | ✅ |
-| Calendar integration | ⬜ |
+| Calendar integration | ✅ |
 
 ---
 
@@ -186,7 +186,7 @@ Most notes apps only store information. The best one should help users:
 | Timed quiz with results + review | ✅ |
 | Feynman exam prep | ✅ |
 | Concept review (insights tab) | ✅ |
-| Timed exam simulation (multi-quiz, strict timer, no feedback until end) | ⬜ |
+| Timed exam simulation (multi-quiz, strict timer, no feedback until end) | ✅ |
 | Socratic mode (AI interrogates your knowledge) | ✅ |
 
 ---
@@ -202,7 +202,7 @@ Most notes apps only store information. The best one should help users:
 | Stale note detection | ✅ |
 | Activity heatmap | ✅ |
 | Performance trends over time (weekly accuracy chart) | ✅ |
-| Topic mastery visualization (strong vs weak subjects) | ⬜ |
+| Topic mastery visualization (strong vs weak subjects) | ✅ |
 | Study time analytics (hours/week, trending) | ✅ |
 | Predicted exam readiness score | ⬜ |
 
@@ -231,7 +231,7 @@ Most notes apps only store information. The best one should help users:
 | Export notes as PDF | ✅ |
 | Export flashcard deck (Anki format) | ✅ |
 | Export all notes as markdown zip | ✅ |
-| Import from Notion / Obsidian | ⬜ |
+| Import from Notion / Obsidian | ✅ |
 | Share note via public read-only link | ✅ |
 
 ---
@@ -257,20 +257,20 @@ Most notes apps only store information. The best one should help users:
 | Clean UX | **8/8** |
 | Frictionless Capture | **10/11** (missing: screenshot) |
 | Automatic Understanding | **8/9** (missing: cross-note topics) |
-| Note Transformation | **7/9** (missing: practice problems, study guides) |
-| Built-In Retention | **7/10** (missing: quiz SR, interleaved practice, forgetting curves) |
+| Note Transformation | **9/9** |
+| Built-In Retention | **8/10** (missing: quiz SR, forgetting curves) |
 | Real Learning Support | **7/9** (missing: step-by-step UI, error analysis) |
 | Knowledge Connections | **7/9** (missing: concept maps, clustering, auto-linking) |
 | Smart Search | **5/5** |
 | Annotations | **6/6** |
-| Action Workflow | **8/9** (missing: calendar) |
-| Study & Exam Modes | **6/7** (missing: exam simulation) |
-| Analytics | **8/10** (missing: mastery viz, readiness) |
+| Action Workflow | **9/9** |
+| Study & Exam Modes | **7/7** |
+| Analytics | **9/10** (missing: readiness) |
 | STEM Support | **5/7** (missing: code execution, handwriting OCR) |
-| Export & Portability | **6/7** (missing: import) |
+| Export & Portability | **7/7** |
 | Personalization | **5/7** (missing: habit analysis, adaptive scheduling) |
 
-**Overall: ~106/122 features implemented (~87%)**
+**Overall: ~114/122 features implemented (~93%)**
 
 ---
 

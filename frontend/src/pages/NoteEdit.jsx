@@ -30,6 +30,264 @@ const getSelectionInfo = (content) => {
   return { text, x: rect.left + rect.width / 2, y: rect.top - 8, startOffset, endOffset }
 }
 
+/** Frosted glass style helper for canvas/moodboard toolbars */
+const frostedStyle = (dark) => ({
+  background: dark ? 'rgba(17,17,17,0.85)' : 'rgba(255,255,255,0.92)',
+  backdropFilter: 'blur(20px) saturate(1.2)',
+  WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
+  border: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
+  boxShadow: dark
+    ? '0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02) inset'
+    : '0 2px 16px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03) inset',
+})
+
+/** Inline save status indicator — reused in canvas toolbar, moodboard toolbar, and main header */
+function SaveStatusIndicator({ saveStatus, variant = 'default' }) {
+  if (variant === 'compact') {
+    return (
+      <div className="px-2.5 py-1.5 text-xs flex items-center gap-1.5">
+        {saveStatus === 'saving' && <span className="flex items-center gap-1 text-[#606060]"><Loader2 size={10} className="animate-spin" /></span>}
+        {saveStatus === 'saved' && <span className="flex items-center gap-1 text-[#333333]"><Check size={10} /></span>}
+        {saveStatus === 'unsaved' && <span className="w-1.5 h-1.5 rounded-full bg-[#606060]" />}
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      {saveStatus === 'saving' && <span className="flex items-center gap-1.5 text-[#333333]"><Loader2 size={12} className="animate-spin" />saving...</span>}
+      {saveStatus === 'saved' && <span className="flex items-center gap-1.5 text-[#333333]"><Check size={12} />saved</span>}
+      {saveStatus === 'unsaved' && <span className="text-[#606060]">unsaved</span>}
+    </div>
+  )
+}
+
+/** Tags popover — used in canvas and moodboard floating toolbars */
+function TagsPopover({ tags, tagInput, onTagInputChange, onAddTag, onRemoveTag, onClose, dark, style }) {
+  const frost = frostedStyle(dark)
+  return (
+    <>
+      <div className="fixed inset-0 z-[9]" onClick={onClose} />
+      <div
+        className="absolute top-16 left-16 z-[11] rounded-xl p-3 min-w-48 max-w-72"
+        style={{
+          ...frost,
+          background: dark ? 'rgba(14,14,14,0.95)' : 'rgba(255,255,255,0.97)',
+          ...style,
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: dark ? '#333333' : '#aaaaaa' }}>
+          tags
+        </div>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {tags.map((tag, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{ background: dark ? 'rgba(25,25,25,0.9)' : 'rgba(240,240,245,0.9)', color: dark ? '#808080' : '#666666' }}
+            >
+              {tag}
+              <button onClick={() => onRemoveTag(i)} className="hover:opacity-70 transition-opacity" style={{ color: dark ? '#444444' : '#bbbbbb' }}>
+                <X size={9} />
+              </button>
+            </span>
+          ))}
+          {tags.length === 0 && <span className="text-[11px]" style={{ color: dark ? '#333333' : '#bbbbbb' }}>no tags yet</span>}
+        </div>
+        <input
+          type="text"
+          value={tagInput}
+          onChange={(e) => onTagInputChange(e.target.value)}
+          onKeyDown={(e) => { onAddTag(e); if (e.key === 'Escape') onClose() }}
+          placeholder="type + enter"
+          autoFocus
+          className="bg-transparent border-none outline-none text-[11px] w-full py-1 px-1 rounded-md"
+          style={{ color: dark ? '#808080' : '#555555', background: dark ? 'rgba(25,25,25,0.5)' : 'rgba(240,240,245,0.5)' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    </>
+  )
+}
+
+/** Loading dots fallback for canvas/moodboard lazy loading */
+function EditorLoadingDots({ dark, label }) {
+  return (
+    <div className="flex items-center justify-center h-full" style={{ background: dark ? '#0a0a0a' : label === 'moodboard' ? '#f5f3ee' : '#ffffff' }}>
+      <div className="flex flex-col items-center gap-4 animate-fade-in">
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ background: dark ? '#c4a759' : '#8b7a3d', opacity: 0.4, animationDelay: `${i * 0.15}s` }}
+            />
+          ))}
+        </div>
+        <span className="text-[11px] tracking-wide" style={{ color: dark ? '#2a2a2a' : '#bbbbbb' }}>loading {label}</span>
+      </div>
+    </div>
+  )
+}
+
+/** Floating toolbar used in canvas and moodboard full-screen modes */
+function FloatingToolbar({ title, onTitleChange, tags, canvasTagsOpen, onToggleTags, saveStatus, chatOpen, onToggleChat, onBack, dark, toolbarVisible, onMouseEnter, onMouseLeave, className }) {
+  const frost = frostedStyle(dark)
+  return (
+    <div
+      className={`${className || ''} flex items-center gap-1.5 ${!toolbarVisible ? 'toolbar-hidden' : ''}`}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Back */}
+      <button
+        onClick={onBack}
+        className="p-2 rounded-xl text-[#606060] hover:text-[#d4d4d4] transition-colors flex-shrink-0"
+        style={frost}
+      >
+        <ArrowLeft size={15} />
+      </button>
+
+      {/* Title + tag trigger + save status — single compact pill */}
+      <div className="flex items-center gap-0 rounded-xl overflow-hidden" style={frost}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="untitled"
+          className="bg-transparent border-none outline-none text-sm font-medium tracking-tight w-36 pl-3 py-1.5"
+          style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleTags() }}
+          className="px-2 py-1.5 transition-colors relative"
+          style={{ color: canvasTagsOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#444444' : '#aaaaaa') }}
+          title="Tags"
+        >
+          <Tag size={13} />
+          {tags.length > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center"
+              style={{ background: dark ? '#c4a759' : '#6965db', color: '#ffffff' }}
+            >
+              {tags.length}
+            </span>
+          )}
+        </button>
+        <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
+        <SaveStatusIndicator saveStatus={saveStatus} variant="compact" />
+      </div>
+
+      {/* Chat toggle */}
+      <button
+        onClick={onToggleChat}
+        className="p-2 rounded-xl transition-colors flex-shrink-0"
+        style={{
+          ...frost,
+          color: chatOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#606060' : '#999999'),
+        }}
+        title="AI Chat"
+      >
+        <MessageSquare size={15} />
+      </button>
+    </div>
+  )
+}
+
+/** Frosted-glass chat panel wrapper for canvas/moodboard modes */
+function FrostedChatPanel({ chatWidth, dark, messages, streaming, chatInput, setChatInput, onSendMessage, onChatKeyDown, content, onClose, style }) {
+  return (
+    <div
+      className="flex-shrink-0 h-full flex flex-col"
+      style={{
+        width: Math.min(chatWidth, 420),
+        background: dark ? 'rgba(10,10,10,0.92)' : 'rgba(252,252,254,0.95)',
+        backdropFilter: 'blur(24px) saturate(1.3)',
+        WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+        borderLeft: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
+        boxShadow: dark
+          ? '-8px 0 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02) inset'
+          : '-4px 0 24px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.03) inset',
+        ...style,
+      }}
+    >
+      <NoteSidebar
+        chatOnly
+        sidebarTab="chat"
+        setSidebarTab={() => {}}
+        messages={messages}
+        streaming={streaming}
+        chatInput={chatInput}
+        setChatInput={setChatInput}
+        onSendMessage={onSendMessage}
+        onChatKeyDown={onChatKeyDown}
+        lookups={[]}
+        activeLookupId={null}
+        onSetActiveLookup={() => {}}
+        onDeleteLookup={() => {}}
+        dark={dark}
+        annotations={[]}
+        content={content}
+        editingAnnotation={null}
+        editAnnotationContent=""
+        onEditAnnotation={() => {}}
+        onEditAnnotationChange={() => {}}
+        onUpdateAnnotation={() => {}}
+        onCancelEditAnnotation={() => {}}
+        onDeleteAnnotation={() => {}}
+        onClose={onClose}
+      />
+    </div>
+  )
+}
+
+/** Share button with dropdown menu */
+function ShareMenu({ shareToken, shareMenuOpen, shareCopied, onShare, onUnshare, onCopyShareLink, onToggleMenu, onCloseMenu }) {
+  return (
+    <div className="relative">
+      {!shareToken ? (
+        <button
+          onClick={onShare}
+          className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
+          title="Share note"
+        >
+          <Share2 size={18} />
+        </button>
+      ) : (
+        <button
+          onClick={onToggleMenu}
+          className="p-2 rounded-md transition-colors text-[#c4a759] bg-[#191919]"
+          title="Sharing enabled"
+        >
+          <Share2 size={18} />
+        </button>
+      )}
+      {shareMenuOpen && shareToken && (
+        <>
+        <div className="fixed inset-0 z-40" onClick={onCloseMenu} />
+        <div className="absolute right-0 top-full mt-1 bg-[#111111] border border-[#1c1c1c] rounded-lg shadow-xl z-50 w-56 py-1">
+          <button
+            onClick={() => { onCopyShareLink(); onCloseMenu() }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#d4d4d4] hover:bg-[#191919] transition-colors"
+          >
+            <Link2 size={13} />
+            {shareCopied ? 'copied!' : 'copy share link'}
+          </button>
+          <button
+            onClick={onUnshare}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[#191919] transition-colors"
+          >
+            <Link2Off size={13} />
+            stop sharing
+          </button>
+        </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function NoteEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -57,10 +315,8 @@ export default function NoteEdit() {
   const [chatInput, setChatInput] = useState('')
   const [sidebarTab, setSidebarTab] = useState('chat')
 
-  // Share state
-  const [shareToken, setShareToken] = useState(null)
-  const [shareMenuOpen, setShareMenuOpen] = useState(false)
-  const [shareCopied, setShareCopied] = useState(false)
+  // Share state (grouped)
+  const [shareState, setShareState] = useState({ token: null, menuOpen: false, copied: false })
 
   // Lookup state
   const [lookups, setLookups] = useState([])
@@ -73,8 +329,8 @@ export default function NoteEdit() {
 
   // Annotations state
   const [annotations, setAnnotations] = useState([])
-  const [editingAnnotation, setEditingAnnotation] = useState(null)
-  const [editAnnotationContent, setEditAnnotationContent] = useState('')
+  // Annotation editing state (grouped)
+  const [annotationEdit, setAnnotationEdit] = useState({ id: null, content: '' })
 
   // Linked notes state
   const [linkedNotes, setLinkedNotes] = useState([])
@@ -83,8 +339,8 @@ export default function NoteEdit() {
   // Wiki links: all note titles for resolution + autocomplete
   const [noteTitles, setNoteTitles] = useState([])
 
-  const [insights, setInsights] = useState(null)
-  const [insightsLoading, setInsightsLoading] = useState(false)
+  // Insights state (grouped)
+  const [insightsState, setInsightsState] = useState({ data: null, loading: false })
 
   // Canvas toolbar auto-hide
   const [toolbarVisible, setToolbarVisible] = useState(true)
@@ -116,7 +372,7 @@ export default function NoteEdit() {
           setTimeout(async () => {
             try {
               const analysisData = await api.get(`/notes/${id}/analysis`)
-              if (analysisData.status === 'ready') setInsights(analysisData.analysis)
+              if (analysisData.status === 'ready') setInsightsState(prev => ({ ...prev, data: analysisData.analysis }))
             } catch { /* ignore */ }
           }, 8000)
         }).catch(() => {})
@@ -259,7 +515,7 @@ export default function NoteEdit() {
         setNote(data)
         setTitle(data.title || '')
         setContent(data.content || '')
-        setShareToken(data.share_token || null)
+        setShareState(prev => ({ ...prev, token: data.share_token || null }))
         setTags((data.tags || []).map(t => typeof t === 'string' ? t : t.name))
         try {
           const anns = await api.get(`/annotations?document_id=${id}`)
@@ -293,8 +549,8 @@ export default function NoteEdit() {
         }
         try {
           const analysisData = await api.get(`/notes/${id}/analysis`)
-          if (analysisData.status === 'ready') setInsights(analysisData.analysis)
-        } catch (err) {
+          if (analysisData.status === 'ready') setInsightsState(prev => ({ ...prev, data: analysisData.analysis }))
+        } catch {
           // Analysis not available yet — that's fine
         }
       } catch (err) {
@@ -455,11 +711,11 @@ export default function NoteEdit() {
   const handleShare = async () => {
     try {
       const { share_token } = await api.post(`/notes/${id}/share`)
-      setShareToken(share_token)
+      setShareState(prev => ({ ...prev, token: share_token }))
       const url = `${window.location.origin}/shared/${share_token}`
       await navigator.clipboard.writeText(url)
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2000)
+      setShareState(prev => ({ ...prev, copied: true }))
+      setTimeout(() => setShareState(prev => ({ ...prev, copied: false })), 2000)
     } catch (err) {
       console.error('Share failed:', err)
     }
@@ -468,18 +724,17 @@ export default function NoteEdit() {
   const handleUnshare = async () => {
     try {
       await api.delete(`/notes/${id}/share`)
-      setShareToken(null)
-      setShareMenuOpen(false)
+      setShareState({ token: null, menuOpen: false, copied: false })
     } catch (err) {
       console.error('Unshare failed:', err)
     }
   }
 
   const handleCopyShareLink = async () => {
-    const url = `${window.location.origin}/shared/${shareToken}`
+    const url = `${window.location.origin}/shared/${shareState.token}`
     await navigator.clipboard.writeText(url)
-    setShareCopied(true)
-    setTimeout(() => setShareCopied(false), 2000)
+    setShareState(prev => ({ ...prev, copied: true }))
+    setTimeout(() => setShareState(prev => ({ ...prev, copied: false })), 2000)
   }
 
   const handleChatKeyDown = (e) => {
@@ -584,13 +839,13 @@ export default function NoteEdit() {
 
   const handleUpdateAnnotation = useCallback(async (annId) => {
     try {
-      const updated = await api.put(`/annotations/${annId}`, { annotation_content: editAnnotationContent })
+      const updated = await api.put(`/annotations/${annId}`, { annotation_content: annotationEdit.content })
       setAnnotations(prev => prev.map(a => a.id === annId ? updated : a))
-      setEditingAnnotation(null)
+      setAnnotationEdit({ id: null, content: '' })
     } catch (err) {
       console.error('Failed to update annotation:', err)
     }
-  }, [editAnnotationContent])
+  }, [annotationEdit.content])
 
   const handleAddLink = useCallback(async (targetId) => {
     try {
@@ -621,6 +876,45 @@ export default function NoteEdit() {
     }
   }, [activeLookupId])
 
+  // Shared props for canvas/moodboard toolbar
+  const toolbarProps = {
+    title,
+    onTitleChange: handleTitleChange,
+    tags,
+    canvasTagsOpen,
+    onToggleTags: () => setCanvasTagsOpen(v => !v),
+    saveStatus,
+    chatOpen,
+    onToggleChat: () => setChatOpen(v => !v),
+    onBack: () => navigate('/'),
+    dark,
+  }
+
+  // Shared props for canvas/moodboard tags popover
+  const tagsPopoverProps = {
+    tags,
+    tagInput,
+    onTagInputChange: setTagInput,
+    onAddTag: handleAddTag,
+    onRemoveTag: handleRemoveTag,
+    onClose: () => setCanvasTagsOpen(false),
+    dark,
+  }
+
+  // Shared props for frosted chat panel in canvas/moodboard
+  const chatPanelProps = {
+    chatWidth,
+    dark,
+    messages,
+    streaming,
+    chatInput,
+    setChatInput,
+    onSendMessage: handleSendMessage,
+    onChatKeyDown: handleChatKeyDown,
+    content,
+    onClose: () => setChatOpen(false),
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -632,204 +926,41 @@ export default function NoteEdit() {
   }
 
   if (isCanvas) {
-    // Cool neutral palette to match Excalidraw's white/gray UI
-    const frostedStyle = {
-      background: dark ? 'rgba(17,17,17,0.85)' : 'rgba(255,255,255,0.92)',
-      backdropFilter: 'blur(20px) saturate(1.2)',
-      WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
-      border: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
-      boxShadow: dark
-        ? '0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02) inset'
-        : '0 2px 16px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03) inset',
-    }
-
     return (
       <div className="h-full w-full relative">
         {/* Floating toolbar — compact, auto-hides after 3s */}
-        <div
-          className={`canvas-toolbar absolute top-4 left-4 z-[10] flex items-center gap-1.5 ${!toolbarVisible ? 'toolbar-hidden' : ''}`}
+        <FloatingToolbar
+          {...toolbarProps}
+          toolbarVisible={toolbarVisible}
+          className="canvas-toolbar absolute top-4 left-4 z-[10]"
           onMouseEnter={() => { setToolbarVisible(true); if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current) }}
           onMouseLeave={() => { toolbarTimerRef.current = setTimeout(() => setToolbarVisible(false), 2000) }}
-        >
-          {/* Back */}
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 rounded-xl text-[#606060] hover:text-[#d4d4d4] transition-colors flex-shrink-0"
-            style={frostedStyle}
-          >
-            <ArrowLeft size={15} />
-          </button>
-
-          {/* Title + tag trigger + save status — single compact pill */}
-          <div className="flex items-center gap-0 rounded-xl overflow-hidden" style={frostedStyle}>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="untitled"
-              className="bg-transparent border-none outline-none text-sm font-medium tracking-tight w-36 pl-3 py-1.5"
-              style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
-            <button
-              onClick={(e) => { e.stopPropagation(); setCanvasTagsOpen(!canvasTagsOpen) }}
-              className="px-2 py-1.5 transition-colors relative"
-              style={{ color: canvasTagsOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#444444' : '#aaaaaa') }}
-              title="Tags"
-            >
-              <Tag size={13} />
-              {tags.length > 0 && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center"
-                  style={{ background: dark ? '#c4a759' : '#6965db', color: '#ffffff' }}
-                >
-                  {tags.length}
-                </span>
-              )}
-            </button>
-            <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
-            <div className="px-2.5 py-1.5 text-xs flex items-center gap-1.5">
-              {saveStatus === 'saving' && <span className="flex items-center gap-1 text-[#606060]"><Loader2 size={10} className="animate-spin" /></span>}
-              {saveStatus === 'saved' && <span className="flex items-center gap-1 text-[#333333]"><Check size={10} /></span>}
-              {saveStatus === 'unsaved' && <span className="w-1.5 h-1.5 rounded-full bg-[#606060]" />}
-            </div>
-          </div>
-
-          {/* Chat toggle */}
-          <button
-            onClick={() => setChatOpen(!chatOpen)}
-            className="p-2 rounded-xl transition-colors flex-shrink-0"
-            style={{
-              ...frostedStyle,
-              color: chatOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#606060' : '#999999'),
-            }}
-            title="AI Chat"
-          >
-            <MessageSquare size={15} />
-          </button>
-        </div>
+        />
 
         {/* Tags popover — drops down below the toolbar */}
         {canvasTagsOpen && (
-          <>
-            <div className="fixed inset-0 z-[9]" onClick={() => setCanvasTagsOpen(false)} />
-            <div
-              className="canvas-tags-popover absolute top-16 left-16 z-[11] rounded-xl p-3 min-w-48 max-w-72"
-              style={{
-                ...frostedStyle,
-                background: dark ? 'rgba(14,14,14,0.95)' : 'rgba(255,255,255,0.97)',
-              }}
-              onMouseEnter={() => { setToolbarVisible(true); if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current) }}
-            >
-              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: dark ? '#333333' : '#aaaaaa' }}>
-                tags
-              </div>
-              <div className="flex flex-wrap gap-1 mb-2">
-                {tags.map((tag, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
-                    style={{ background: dark ? 'rgba(25,25,25,0.9)' : 'rgba(240,240,245,0.9)', color: dark ? '#808080' : '#666666' }}
-                  >
-                    {tag}
-                    <button
-                      onClick={() => handleRemoveTag(i)}
-                      className="hover:opacity-70 transition-opacity"
-                      style={{ color: dark ? '#444444' : '#bbbbbb' }}
-                    >
-                      <X size={9} />
-                    </button>
-                  </span>
-                ))}
-                {tags.length === 0 && (
-                  <span className="text-[11px]" style={{ color: dark ? '#333333' : '#bbbbbb' }}>no tags yet</span>
-                )}
-              </div>
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { handleAddTag(e); if (e.key === 'Escape') setCanvasTagsOpen(false) }}
-                placeholder="type + enter"
-                autoFocus
-                className="bg-transparent border-none outline-none text-[11px] w-full py-1 px-1 rounded-md"
-                style={{
-                  color: dark ? '#808080' : '#555555',
-                  background: dark ? 'rgba(25,25,25,0.5)' : 'rgba(240,240,245,0.5)',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          </>
+          <TagsPopover
+            {...tagsPopoverProps}
+            style={{}}
+          />
         )}
 
         {/* Chat sidebar — frosted glass overlay */}
         {chatOpen && (
-          <div
-            className="canvas-chat-panel absolute top-0 right-0 z-[9] h-full flex flex-col"
-            style={{
-              width: Math.min(chatWidth, 420),
-              background: dark ? 'rgba(10,10,10,0.92)' : 'rgba(252,252,254,0.95)',
-              backdropFilter: 'blur(24px) saturate(1.3)',
-              WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
-              borderLeft: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
-              boxShadow: dark
-                ? '-8px 0 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02) inset'
-                : '-4px 0 24px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.03) inset',
-            }}
-          >
-            {/* Canvas mode: chat-only sidebar — annotation/lookup features not applicable */}
-            <NoteSidebar
-              chatOnly
-              sidebarTab="chat"
-              setSidebarTab={() => {}}
-              messages={messages}
-              streaming={streaming}
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              onSendMessage={handleSendMessage}
-              onChatKeyDown={handleChatKeyDown}
-              lookups={[]}
-              activeLookupId={null}
-              onSetActiveLookup={() => {}}
-              onDeleteLookup={() => {}}
-              dark={dark}
-              annotations={[]}
-              content={content}
-              editingAnnotation={null}
-              editAnnotationContent=""
-              onEditAnnotation={() => {}}
-              onEditAnnotationChange={() => {}}
-              onUpdateAnnotation={() => {}}
-              onCancelEditAnnotation={() => {}}
-              onDeleteAnnotation={() => {}}
-              onClose={() => setChatOpen(false)}
+          <div className="canvas-chat-panel absolute top-0 right-0 z-[9] h-full">
+            <FrostedChatPanel
+              {...chatPanelProps}
+              style={{
+                boxShadow: dark
+                  ? '-8px 0 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02) inset'
+                  : '-4px 0 24px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.03) inset',
+              }}
             />
           </div>
         )}
 
         {/* Full-screen canvas */}
-        <Suspense fallback={
-          <div className="flex items-center justify-center h-full" style={{ background: dark ? '#0a0a0a' : '#ffffff' }}>
-            <div className="flex flex-col items-center gap-4 animate-fade-in">
-              <div className="flex gap-1.5">
-                {[0, 1, 2].map(i => (
-                  <div
-                    key={i}
-                    className="w-1.5 h-1.5 rounded-full animate-pulse"
-                    style={{
-                      background: dark ? '#c4a759' : '#8b7a3d',
-                      opacity: 0.4,
-                      animationDelay: `${i * 0.15}s`,
-                    }}
-                  />
-                ))}
-              </div>
-              <span className="text-[11px] tracking-wide" style={{ color: dark ? '#2a2a2a' : '#bbbbbb' }}>loading canvas</span>
-            </div>
-          </div>
-        }>
+        <Suspense fallback={<EditorLoadingDots dark={dark} label="canvas" />}>
           <CanvasEditor initialData={content} onChange={handleCanvasChange} dark={dark} onApiReady={(api) => { excalidrawApiRef.current = api }} />
         </Suspense>
       </div>
@@ -837,131 +968,24 @@ export default function NoteEdit() {
   }
 
   if (isMoodboard) {
-    const frostedStyle = {
-      background: dark ? 'rgba(17,17,17,0.85)' : 'rgba(255,255,255,0.92)',
-      backdropFilter: 'blur(20px) saturate(1.2)',
-      WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
-      border: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
-      boxShadow: dark
-        ? '0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02) inset'
-        : '0 2px 16px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03) inset',
-    }
-
     return (
       <div className="h-full w-full relative flex flex-col" style={{ background: dark ? '#0a0a0a' : '#f5f3ee' }}>
         {/* Floating toolbar */}
-        <div className="flex items-center gap-1.5 p-4 flex-shrink-0">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 rounded-xl text-[#606060] hover:text-[#d4d4d4] transition-colors flex-shrink-0"
-            style={frostedStyle}
-          >
-            <ArrowLeft size={15} />
-          </button>
-
-          <div className="flex items-center gap-0 rounded-xl overflow-hidden" style={frostedStyle}>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="untitled"
-              className="bg-transparent border-none outline-none text-sm font-medium tracking-tight w-36 pl-3 py-1.5"
-              style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}
-            />
-            <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
-            <button
-              onClick={(e) => { e.stopPropagation(); setCanvasTagsOpen(!canvasTagsOpen) }}
-              className="px-2 py-1.5 transition-colors relative"
-              style={{ color: canvasTagsOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#444444' : '#aaaaaa') }}
-            >
-              <Tag size={13} />
-              {tags.length > 0 && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center"
-                  style={{ background: dark ? '#c4a759' : '#6965db', color: '#ffffff' }}
-                >
-                  {tags.length}
-                </span>
-              )}
-            </button>
-            <div className="w-px h-4" style={{ background: dark ? 'rgba(42,42,42,0.5)' : 'rgba(0,0,0,0.08)' }} />
-            <div className="px-2.5 py-1.5 text-xs flex items-center gap-1.5">
-              {saveStatus === 'saving' && <span className="flex items-center gap-1 text-[#606060]"><Loader2 size={10} className="animate-spin" /></span>}
-              {saveStatus === 'saved' && <span className="flex items-center gap-1 text-[#333333]"><Check size={10} /></span>}
-              {saveStatus === 'unsaved' && <span className="w-1.5 h-1.5 rounded-full bg-[#606060]" />}
-            </div>
-          </div>
-
-          <button
-            onClick={() => setChatOpen(!chatOpen)}
-            className="p-2 rounded-xl transition-colors flex-shrink-0"
-            style={{
-              ...frostedStyle,
-              color: chatOpen ? (dark ? '#c4a759' : '#6965db') : (dark ? '#606060' : '#999999'),
-            }}
-          >
-            <MessageSquare size={15} />
-          </button>
-        </div>
+        <FloatingToolbar
+          {...toolbarProps}
+          toolbarVisible={true}
+          className="p-4 flex-shrink-0"
+        />
 
         {/* Tags popover */}
         {canvasTagsOpen && (
-          <>
-            <div className="fixed inset-0 z-[9]" onClick={() => setCanvasTagsOpen(false)} />
-            <div
-              className="absolute top-16 left-16 z-[11] rounded-xl p-3 min-w-48 max-w-72"
-              style={{
-                ...frostedStyle,
-                background: dark ? 'rgba(14,14,14,0.95)' : 'rgba(255,255,255,0.97)',
-              }}
-            >
-              <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: dark ? '#333333' : '#aaaaaa' }}>
-                tags
-              </div>
-              <div className="flex flex-wrap gap-1 mb-2">
-                {tags.map((tag, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
-                    style={{ background: dark ? 'rgba(25,25,25,0.9)' : 'rgba(240,240,245,0.9)', color: dark ? '#808080' : '#666666' }}
-                  >
-                    {tag}
-                    <button onClick={() => handleRemoveTag(i)} className="hover:opacity-70 transition-opacity" style={{ color: dark ? '#444444' : '#bbbbbb' }}>
-                      <X size={9} />
-                    </button>
-                  </span>
-                ))}
-                {tags.length === 0 && <span className="text-[11px]" style={{ color: dark ? '#333333' : '#bbbbbb' }}>no tags yet</span>}
-              </div>
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { handleAddTag(e); if (e.key === 'Escape') setCanvasTagsOpen(false) }}
-                placeholder="type + enter"
-                autoFocus
-                className="bg-transparent border-none outline-none text-[11px] w-full py-1 px-1 rounded-md"
-                style={{ color: dark ? '#808080' : '#555555', background: dark ? 'rgba(25,25,25,0.5)' : 'rgba(240,240,245,0.5)' }}
-              />
-            </div>
-          </>
+          <TagsPopover {...tagsPopoverProps} />
         )}
 
         <div className="flex flex-1 min-h-0">
           {/* Moodboard editor */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <Suspense fallback={
-              <div className="flex items-center justify-center h-full" style={{ background: dark ? '#0a0a0a' : '#f5f3ee' }}>
-                <div className="flex flex-col items-center gap-4 animate-fade-in">
-                  <div className="flex gap-1.5">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: dark ? '#c4a759' : '#8b7a3d', opacity: 0.4, animationDelay: `${i * 0.15}s` }} />
-                    ))}
-                  </div>
-                  <span className="text-[11px] tracking-wide" style={{ color: dark ? '#2a2a2a' : '#bbbbbb' }}>loading moodboard</span>
-                </div>
-              </div>
-            }>
+            <Suspense fallback={<EditorLoadingDots dark={dark} label="moodboard" />}>
               <MoodboardEditor
                 initialData={content}
                 onChange={handleMoodboardChange}
@@ -977,43 +1001,7 @@ export default function NoteEdit() {
 
           {/* Chat sidebar */}
           {chatOpen && (
-            <div
-              className="flex-shrink-0 h-full flex flex-col"
-              style={{
-                width: Math.min(chatWidth, 420),
-                background: dark ? 'rgba(10,10,10,0.92)' : 'rgba(252,252,254,0.95)',
-                backdropFilter: 'blur(24px) saturate(1.3)',
-                WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
-                borderLeft: `1px solid ${dark ? 'rgba(28,28,28,0.8)' : 'rgba(230,230,235,0.9)'}`,
-              }}
-            >
-              <NoteSidebar
-                chatOnly
-                sidebarTab="chat"
-                setSidebarTab={() => {}}
-                messages={messages}
-                streaming={streaming}
-                chatInput={chatInput}
-                setChatInput={setChatInput}
-                onSendMessage={handleSendMessage}
-                onChatKeyDown={handleChatKeyDown}
-                lookups={[]}
-              activeLookupId={null}
-              onSetActiveLookup={() => {}}
-              onDeleteLookup={() => {}}
-                dark={dark}
-                annotations={[]}
-                content={content}
-                editingAnnotation={null}
-                editAnnotationContent=""
-                onEditAnnotation={() => {}}
-                onEditAnnotationChange={() => {}}
-                onUpdateAnnotation={() => {}}
-                onCancelEditAnnotation={() => {}}
-                onDeleteAnnotation={() => {}}
-                onClose={() => setChatOpen(false)}
-              />
-            </div>
+            <FrostedChatPanel {...chatPanelProps} />
           )}
         </div>
       </div>
@@ -1029,11 +1017,7 @@ export default function NoteEdit() {
             <ArrowLeft size={20} />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-1.5 text-xs">
-            {saveStatus === 'saving' && <span className="flex items-center gap-1.5 text-[#333333]"><Loader2 size={12} className="animate-spin" />saving...</span>}
-            {saveStatus === 'saved' && <span className="flex items-center gap-1.5 text-[#333333]"><Check size={12} />saved</span>}
-            {saveStatus === 'unsaved' && <span className="text-[#606060]">unsaved</span>}
-          </div>
+          <SaveStatusIndicator saveStatus={saveStatus} />
           {userVimAllowed && vimEnabled && mode === 'write' && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#191919] border border-[#1c1c1c] text-[#808080] tracking-wider select-none">
               {vimMode}
@@ -1069,46 +1053,16 @@ export default function NoteEdit() {
               <Download size={18} />
             </button>
           )}
-          <div className="relative">
-            {!shareToken ? (
-              <button
-                onClick={handleShare}
-                className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
-                title="Share note"
-              >
-                <Share2 size={18} />
-              </button>
-            ) : (
-              <button
-                onClick={() => setShareMenuOpen(s => !s)}
-                className="p-2 rounded-md transition-colors text-[#c4a759] bg-[#191919]"
-                title="Sharing enabled"
-              >
-                <Share2 size={18} />
-              </button>
-            )}
-            {shareMenuOpen && shareToken && (
-              <>
-              <div className="fixed inset-0 z-40" onClick={() => setShareMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 bg-[#111111] border border-[#1c1c1c] rounded-lg shadow-xl z-50 w-56 py-1">
-                <button
-                  onClick={() => { handleCopyShareLink(); setShareMenuOpen(false) }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#d4d4d4] hover:bg-[#191919] transition-colors"
-                >
-                  <Link2 size={13} />
-                  {shareCopied ? 'copied!' : 'copy share link'}
-                </button>
-                <button
-                  onClick={handleUnshare}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[#191919] transition-colors"
-                >
-                  <Link2Off size={13} />
-                  stop sharing
-                </button>
-              </div>
-              </>
-            )}
-          </div>
+          <ShareMenu
+            shareToken={shareState.token}
+            shareMenuOpen={shareState.menuOpen}
+            shareCopied={shareState.copied}
+            onShare={handleShare}
+            onUnshare={handleUnshare}
+            onCopyShareLink={handleCopyShareLink}
+            onToggleMenu={() => setShareState(prev => ({ ...prev, menuOpen: !prev.menuOpen }))}
+            onCloseMenu={() => setShareState(prev => ({ ...prev, menuOpen: false }))}
+          />
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className={`p-2 rounded-md transition-colors ${chatOpen ? 'bg-[#191919] text-[#d4d4d4]' : 'text-[#333333] hover:text-[#606060]'}`}
@@ -1226,20 +1180,20 @@ export default function NoteEdit() {
                 dark={dark}
                 annotations={annotations}
                 content={content}
-                editingAnnotation={editingAnnotation}
-                editAnnotationContent={editAnnotationContent}
-                onEditAnnotation={(annId, annContent) => { setEditingAnnotation(annId); setEditAnnotationContent(annContent) }}
-                onEditAnnotationChange={setEditAnnotationContent}
+                editingAnnotation={annotationEdit.id}
+                editAnnotationContent={annotationEdit.content}
+                onEditAnnotation={(annId, annContent) => { setAnnotationEdit({ id: annId, content: annContent }) }}
+                onEditAnnotationChange={(val) => setAnnotationEdit(prev => ({ ...prev, content: val }))}
                 onUpdateAnnotation={handleUpdateAnnotation}
-                onCancelEditAnnotation={() => setEditingAnnotation(null)}
+                onCancelEditAnnotation={() => setAnnotationEdit({ id: null, content: '' })}
                 onDeleteAnnotation={handleDeleteAnnotation}
                 linkedNotes={linkedNotes}
                 suggestions={suggestions}
                 onAddLink={handleAddLink}
                 onRemoveLink={handleRemoveLink}
                 noteId={parseInt(id)}
-                insights={insights}
-                insightsLoading={insightsLoading}
+                insights={insightsState.data}
+                insightsLoading={insightsState.loading}
                 onAddInsightTag={handleAddInsightTag}
                 onCreateFlashcard={handleCreateFlashcard}
                 onClose={() => setChatOpen(false)}

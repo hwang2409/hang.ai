@@ -6,9 +6,9 @@ from app.config import settings
 
 client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-CONVERT_PROMPT = """You are a study assistant that converts raw source material into well-structured study notes.
+CONVERT_PROMPT = """Convert the raw source material below into well-structured study notes.
 
-Given the extracted text below, create organized study notes. Follow these rules:
+Rules:
 
 1. ANALYZE the content and identify the major concepts/topics.
 2. If there are MULTIPLE distinct concepts (3+), create SEPARATE notes for each concept. If the content covers a single topic, create ONE comprehensive note.

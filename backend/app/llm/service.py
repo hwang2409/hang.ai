@@ -1,3 +1,4 @@
+import asyncio
 from typing import AsyncGenerator
 
 import anthropic
@@ -6,10 +7,11 @@ from app.config import settings
 
 client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-DEFAULT_SYSTEM = (
-    "You are a helpful AI study assistant for the Hang.ai learning platform. "
-    "Help students understand concepts, improve their notes, and learn effectively."
-)
+_llm_semaphore = asyncio.Semaphore(20)
+
+from app.llm.prompts import VOICE
+
+DEFAULT_SYSTEM = VOICE
 
 
 async def stream_chat(
@@ -17,14 +19,15 @@ async def stream_chat(
 ) -> AsyncGenerator[str, None]:
     """Yield text chunks from Claude streaming response."""
     system = system_prompt or DEFAULT_SYSTEM
-    async with client.messages.stream(
-        model=settings.CLAUDE_MODEL,
-        max_tokens=4096,
-        system=system,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+    async with _llm_semaphore:
+        async with client.messages.stream(
+            model=settings.CLAUDE_MODEL,
+            max_tokens=4096,
+            system=system,
+            messages=messages,
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
 
 
 async def stream_chat_with_tools(
@@ -73,25 +76,26 @@ async def stream_chat_with_tools(
         kwargs["tools"] = tools
 
     final_message = None
-    async with client.messages.stream(**kwargs) as stream:
-        async for event in stream:
-            # Built-in web search: server_tool_use starts a search
-            if event.type == "content_block_start":
-                block = getattr(event, "content_block", None)
-                if block and block.type == "server_tool_use":
-                    query = ""
-                    if hasattr(block, "input") and isinstance(block.input, dict):
-                        query = block.input.get("query", "")
-                    yield ("search_start", {"query": query})
-            # Built-in web search: result block
-            elif event.type == "content_block_stop":
-                pass  # results extracted from final_message below
-            # Text deltas
-            elif event.type == "content_block_delta":
-                delta = getattr(event, "delta", None)
-                if delta and hasattr(delta, "text"):
-                    yield ("text", delta.text)
-        final_message = await stream.get_final_message()
+    async with _llm_semaphore:
+        async with client.messages.stream(**kwargs) as stream:
+            async for event in stream:
+                # Built-in web search: server_tool_use starts a search
+                if event.type == "content_block_start":
+                    block = getattr(event, "content_block", None)
+                    if block and block.type == "server_tool_use":
+                        query = ""
+                        if hasattr(block, "input") and isinstance(block.input, dict):
+                            query = block.input.get("query", "")
+                        yield ("search_start", {"query": query})
+                # Built-in web search: result block
+                elif event.type == "content_block_stop":
+                    pass  # results extracted from final_message below
+                # Text deltas
+                elif event.type == "content_block_delta":
+                    delta = getattr(event, "delta", None)
+                    if delta and hasattr(delta, "text"):
+                        yield ("text", delta.text)
+            final_message = await stream.get_final_message()
 
     if final_message:
         for block in final_message.content:
@@ -122,11 +126,12 @@ async def stream_chat_with_tools(
 
 async def evaluate_text(prompt: str, system_prompt: str = "") -> str:
     """Non-streaming single response from Claude."""
-    system = system_prompt or "You are a helpful AI study assistant."
-    response = await client.messages.create(
-        model=settings.CLAUDE_MODEL,
-        max_tokens=4096,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    system = system_prompt or DEFAULT_SYSTEM
+    async with _llm_semaphore:
+        response = await client.messages.create(
+            model=settings.CLAUDE_MODEL,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
     return response.content[0].text
