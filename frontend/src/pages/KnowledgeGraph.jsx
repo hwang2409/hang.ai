@@ -76,8 +76,17 @@ export default function KnowledgeGraph() {
   const [viewMode, setViewMode] = useState('notes')
   const [glowPhase, setGlowPhase] = useState(0)
 
-  // Animated glow pulse for hovered node
+  // Concept explorer state
+  const [concepts, setConcepts] = useState([])
+  const [conceptsLoading, setConceptsLoading] = useState(false)
+  const [sortMode, setSortMode] = useState('mastery-desc')
+  const [expandedConcept, setExpandedConcept] = useState(null)
+  const [conceptNotes, setConceptNotes] = useState([])
+  const [conceptNotesLoading, setConceptNotesLoading] = useState(false)
+
+  // Animated glow pulse for hovered node — skip in concepts view
   useEffect(() => {
+    if (viewMode === 'concepts') return
     let raf
     let t = 0
     const tick = () => {
@@ -87,11 +96,11 @@ export default function KnowledgeGraph() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [])
+  }, [viewMode])
 
-  // Ambient idle drift — tiny random velocities when settled
+  // Ambient idle drift — tiny random velocities when settled (skip in concepts view)
   useEffect(() => {
-    if (!settled) {
+    if (viewMode === 'concepts' || !settled) {
       if (driftRef.current) cancelAnimationFrame(driftRef.current)
       return
     }
@@ -111,7 +120,7 @@ export default function KnowledgeGraph() {
     }
     driftRef.current = requestAnimationFrame(drift)
     return () => { if (driftRef.current) cancelAnimationFrame(driftRef.current) }
-  }, [settled])
+  }, [settled, viewMode])
 
   // Load data for the active view
   const loadGraph = useCallback((mode) => {
@@ -144,8 +153,26 @@ export default function KnowledgeGraph() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load concept tiles (no physics)
+  const loadConcepts = useCallback(() => {
+    setConceptsLoading(true)
+    setExpandedConcept(null)
+    setConceptNotes([])
+    // Stop any running graph animations
+    if (animRef.current) cancelAnimationFrame(animRef.current)
+    if (driftRef.current) cancelAnimationFrame(driftRef.current)
+    api.get('/knowledge/concepts')
+      .then(data => setConcepts(data.concepts || []))
+      .catch(() => setConcepts([]))
+      .finally(() => setConceptsLoading(false))
+  }, [])
+
   useEffect(() => {
-    loadGraph(viewMode)
+    if (viewMode === 'concepts') {
+      loadConcepts()
+    } else {
+      loadGraph('notes')
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode])
 
@@ -320,11 +347,8 @@ export default function KnowledgeGraph() {
   }, [searchQuery])
 
   const nodeRadius = useCallback((node) => {
-    if (viewMode === 'concepts') {
-      return Math.min(Math.max(3, 3 + (node.note_count || 0) * 1.2), 10)
-    }
     return Math.min(Math.max(3, 3 + node.degree * 1.0), 10)
-  }, [viewMode])
+  }, [])
 
   const nodes = nodesRef.current
   const edges = edgesRef.current
@@ -341,6 +365,31 @@ export default function KnowledgeGraph() {
     })
     return s
   }, [hoveredNode, edges])
+
+  // Filtered + sorted concepts for tile grid
+  const filteredConcepts = useMemo(() => {
+    let list = concepts
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter(c => (c.concept || '').toLowerCase().includes(q))
+    }
+    const sorted = [...list]
+    switch (sortMode) {
+      case 'mastery-desc': sorted.sort((a, b) => (b.mastery_pct ?? 0) - (a.mastery_pct ?? 0)); break
+      case 'mastery-asc': sorted.sort((a, b) => (a.mastery_pct ?? 0) - (b.mastery_pct ?? 0)); break
+      case 'notes': sorted.sort((a, b) => (b.note_count ?? 0) - (a.note_count ?? 0)); break
+      case 'alpha': sorted.sort((a, b) => (a.concept || '').localeCompare(b.concept || '')); break
+      case 'recent': sorted.sort((a, b) => (b.last_seen_at || '').localeCompare(a.last_seen_at || '')); break
+      default: break
+    }
+    return sorted
+  }, [concepts, searchQuery, sortMode])
+
+  const conceptStats = useMemo(() => {
+    if (!concepts.length) return null
+    const avg = Math.round(concepts.reduce((s, c) => s + (c.mastery_pct ?? 0), 0) / concepts.length)
+    return { total: concepts.length, avgMastery: avg }
+  }, [concepts])
 
   // Theme-aware colors
   const bg = dark ? '#0d1117' : '#f0f0f5'
@@ -370,6 +419,31 @@ export default function KnowledgeGraph() {
       : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'),
   })
 
+  // Expand a concept tile — lazy-fetch linked notes
+  const handleConceptExpand = useCallback((concept) => {
+    if (expandedConcept && expandedConcept.id === concept.id) {
+      setExpandedConcept(null)
+      setConceptNotes([])
+      return
+    }
+    setExpandedConcept(concept)
+    setConceptNotes([])
+    setConceptNotesLoading(true)
+    const fetchId = concept.id
+    api.get(`/notes/by-concept?concept=${encodeURIComponent(concept.concept)}`)
+      .then(data => {
+        // Race condition guard
+        setExpandedConcept(prev => {
+          if (prev && prev.id === fetchId) {
+            setConceptNotes(data.notes || [])
+          }
+          return prev
+        })
+      })
+      .catch(() => setConceptNotes([]))
+      .finally(() => setConceptNotesLoading(false))
+  }, [expandedConcept])
+
   const emptyMessage = viewMode === 'concepts'
     ? 'study more notes to build your concept map'
     : 'create notes to see your knowledge graph'
@@ -389,7 +463,7 @@ export default function KnowledgeGraph() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="search graph..."
+            placeholder={viewMode === 'concepts' ? 'search concepts...' : 'search graph...'}
             className="px-3 py-1.5 rounded-lg text-xs outline-none transition-all"
             style={{
               width: 190,
@@ -422,7 +496,7 @@ export default function KnowledgeGraph() {
         </div>
 
         {/* Stats */}
-        {nodes.length > 0 && (
+        {viewMode === 'notes' && nodes.length > 0 && (
           <div
             className="absolute top-10 right-5 z-10 text-[10px] tracking-wider uppercase"
             style={{
@@ -430,364 +504,456 @@ export default function KnowledgeGraph() {
               fontFamily: 'var(--font-mono, monospace)',
             }}
           >
-            {nodes.length} {viewMode === 'concepts' ? 'concepts' : 'nodes'} &middot; {edges.length} edges
+            {nodes.length} nodes &middot; {edges.length} edges
           </div>
         )}
 
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative w-12 h-12">
-                <div
-                  className="absolute inset-0 rounded-full animate-ping"
-                  style={{ background: dark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(60, 100, 180, 0.08)' }}
-                />
-                <div
-                  className="absolute inset-2 rounded-full animate-pulse"
-                  style={{ background: dark ? 'rgba(88, 166, 255, 0.2)' : 'rgba(60, 100, 180, 0.12)' }}
-                />
-                <div
-                  className="absolute inset-4 rounded-full"
-                  style={{ background: dark ? '#58a6ff' : '#3c64b4' }}
-                />
+        {/* ─── Concepts View ─── */}
+        {viewMode === 'concepts' ? (
+          conceptsLoading ? (
+            <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative w-12 h-12">
+                  <div className="absolute inset-0 rounded-full animate-ping" style={{ background: dark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(60, 100, 180, 0.08)' }} />
+                  <div className="absolute inset-2 rounded-full animate-pulse" style={{ background: dark ? 'rgba(88, 166, 255, 0.2)' : 'rgba(60, 100, 180, 0.12)' }} />
+                  <div className="absolute inset-4 rounded-full" style={{ background: dark ? '#58a6ff' : '#3c64b4' }} />
+                </div>
+                <span className="text-[11px] tracking-widest uppercase" style={{ color: dark ? 'rgba(139, 148, 158, 0.4)' : 'rgba(100, 100, 120, 0.5)' }}>
+                  loading concepts
+                </span>
               </div>
-              <span
-                className="text-[11px] tracking-widest uppercase"
-                style={{ color: dark ? 'rgba(139, 148, 158, 0.4)' : 'rgba(100, 100, 120, 0.5)' }}
+            </div>
+          ) : concepts.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
+              <div className="text-center max-w-xs">
+                <div className="mb-6 relative mx-auto" style={{ width: 80, height: 80 }}>
+                  <svg width="80" height="80" viewBox="0 0 80 80">
+                    <circle cx="20" cy="25" r="2" fill={dark ? '#58a6ff' : '#3c64b4'} opacity="0.3" />
+                    <circle cx="55" cy="18" r="1.5" fill={dark ? '#b392f0' : '#6a5acd'} opacity="0.25" />
+                    <circle cx="40" cy="50" r="2.5" fill={dark ? '#79c0ff' : '#4a80c4'} opacity="0.35" />
+                    <circle cx="65" cy="55" r="1.5" fill={dark ? '#c9d1d9' : '#666'} opacity="0.2" />
+                  </svg>
+                </div>
+                <p className="text-xs mb-1" style={{ color: dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.6)' }}>no concepts yet</p>
+                <p className="text-[11px]" style={{ color: dark ? 'rgba(139,148,158,0.3)' : 'rgba(100,100,120,0.4)' }}>
+                  {emptyMessage}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto" style={{ background: bg, paddingTop: 48 }}>
+              {/* Summary bar */}
+              {conceptStats && (
+                <div className="px-4 pb-3">
+                  <div className="rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3" style={glassStyle}>
+                    <span className="text-[11px] tracking-wider" style={{
+                      color: dark ? 'rgba(139,148,158,0.6)' : 'rgba(100,100,120,0.6)',
+                      fontFamily: 'var(--font-mono, monospace)',
+                    }}>
+                      {conceptStats.total} concept{conceptStats.total !== 1 ? 's' : ''} &middot; avg {conceptStats.avgMastery}% mastery
+                    </span>
+                    <div className="flex items-center gap-1 ml-auto">
+                      {[
+                        { key: 'mastery-desc', label: 'mastery \u2193' },
+                        { key: 'mastery-asc', label: 'mastery \u2191' },
+                        { key: 'notes', label: 'notes' },
+                        { key: 'alpha', label: 'a\u2013z' },
+                        { key: 'recent', label: 'recent' },
+                      ].map(s => (
+                        <button
+                          key={s.key}
+                          onClick={() => setSortMode(s.key)}
+                          className="px-2 py-0.5 rounded-md text-[9px] tracking-wider uppercase transition-all"
+                          style={toggleBtnStyle(sortMode === s.key)}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Concept grid */}
+              <div
+                className="px-4 pb-6 stagger-in"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                  gap: 10,
+                }}
               >
-                {viewMode === 'concepts' ? 'mapping concepts' : 'mapping connections'}
-              </span>
-            </div>
-          </div>
-        ) : nodes.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
-            <div className="text-center max-w-xs">
-              <div className="mb-6 relative mx-auto" style={{ width: 80, height: 80 }}>
-                <svg width="80" height="80" viewBox="0 0 80 80">
-                  {/* Constellation empty state */}
-                  <circle cx="20" cy="25" r="2" fill={dark ? '#58a6ff' : '#3c64b4'} opacity="0.3" />
-                  <circle cx="55" cy="18" r="1.5" fill={dark ? '#b392f0' : '#6a5acd'} opacity="0.25" />
-                  <circle cx="40" cy="50" r="2.5" fill={dark ? '#79c0ff' : '#4a80c4'} opacity="0.35" />
-                  <circle cx="65" cy="55" r="1.5" fill={dark ? '#c9d1d9' : '#666'} opacity="0.2" />
-                  <line x1="20" y1="25" x2="40" y2="50" stroke={dark ? '#58a6ff' : '#3c64b4'} strokeWidth="0.4" opacity="0.15" />
-                  <line x1="55" y1="18" x2="40" y2="50" stroke={dark ? '#b392f0' : '#6a5acd'} strokeWidth="0.4" opacity="0.12" />
-                  <line x1="40" y1="50" x2="65" y2="55" stroke={dark ? '#79c0ff' : '#4a80c4'} strokeWidth="0.4" opacity="0.1" />
-                </svg>
+                {filteredConcepts.map((c, idx) => {
+                  const color = getConceptColor(c.mastery_pct, dark)
+                  const isExpanded = expandedConcept && expandedConcept.id === c.id
+
+                  return (
+                    <div key={c.id} style={isExpanded ? { gridColumn: '1 / -1' } : undefined}>
+                      <div
+                        onClick={() => handleConceptExpand(c)}
+                        className="rounded-lg cursor-pointer transition-all"
+                        style={{
+                          background: dark ? '#161b22' : '#ffffff',
+                          border: `1px solid ${isExpanded ? color : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)')}`,
+                          boxShadow: isExpanded
+                            ? `0 0 12px ${color}33`
+                            : (dark ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.06)'),
+                          transform: 'translateY(0)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.borderColor = color
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          if (!isExpanded) e.currentTarget.style.borderColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
+                        }}
+                      >
+                        <div className="p-3 pb-2">
+                          <div
+                            className="text-[13px] font-medium leading-tight mb-1.5"
+                            style={{
+                              color: dark ? '#c9d1d9' : '#1f2937',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {c.concept}
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span style={{
+                              fontSize: 20,
+                              fontFamily: "'JetBrains Mono', var(--font-mono, monospace)",
+                              fontWeight: 600,
+                              color,
+                            }}>
+                              {Math.round(c.mastery_pct ?? 0)}%
+                            </span>
+                            <span className="text-[10px]" style={{
+                              color: dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.5)',
+                            }}>
+                              {c.note_count || 0} note{(c.note_count || 0) !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Mastery bar */}
+                        <div style={{
+                          height: 3,
+                          background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                        }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${Math.round(c.mastery_pct ?? 0)}%`,
+                            background: color,
+                            borderRadius: '0 2px 2px 0',
+                            transition: 'width 0.3s ease',
+                          }} />
+                        </div>
+                      </div>
+
+                      {/* Expanded detail panel */}
+                      {isExpanded && (
+                        <div
+                          className="mt-2 rounded-xl p-4 animate-fade-in"
+                          style={{
+                            ...glassStyle,
+                            borderLeft: `3px solid ${color}`,
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium" style={{ color: dark ? '#c9d1d9' : '#1f2937' }}>
+                                {c.concept}
+                              </span>
+                              <span className="text-xs" style={{
+                                fontFamily: "'JetBrains Mono', var(--font-mono, monospace)",
+                                color,
+                              }}>
+                                {Math.round(c.mastery_pct ?? 0)}%
+                              </span>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setExpandedConcept(null); setConceptNotes([]) }}
+                              className="w-6 h-6 flex items-center justify-center rounded-md transition-colors"
+                              style={{
+                                color: dark ? 'rgba(139,148,158,0.6)' : 'rgba(100,100,120,0.6)',
+                                background: 'transparent',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                              &#x2715;
+                            </button>
+                          </div>
+
+                          {conceptNotesLoading ? (
+                            <div className="space-y-2">
+                              {[1, 2, 3].map(i => (
+                                <div key={i} className="rounded-md animate-pulse" style={{
+                                  height: 36,
+                                  background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                                }} />
+                              ))}
+                            </div>
+                          ) : conceptNotes.length === 0 ? (
+                            <p className="text-[11px]" style={{
+                              color: dark ? 'rgba(139,148,158,0.4)' : 'rgba(100,100,120,0.4)',
+                            }}>
+                              no related notes found
+                            </p>
+                          ) : (
+                            <div className="space-y-1">
+                              {conceptNotes.map(note => (
+                                <div
+                                  key={note.id}
+                                  onClick={(e) => { e.stopPropagation(); navigate(`/notes/${note.id}`) }}
+                                  className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors"
+                                  style={{
+                                    background: 'transparent',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <span className="text-xs" style={{ color: dark ? '#b0b8c4' : '#374151' }}>
+                                    {note.title || 'Untitled'}
+                                  </span>
+                                  <span className="text-[10px] ml-auto flex-shrink-0" style={{
+                                    color: dark ? 'rgba(139,148,158,0.4)' : 'rgba(100,100,120,0.4)',
+                                  }}>
+                                    {note.source_type === 'prerequisite' ? 'prereq' : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* No results from search */}
+                {filteredConcepts.length === 0 && searchQuery.trim() && (
+                  <div className="col-span-full text-center py-8">
+                    <p className="text-[11px]" style={{ color: dark ? 'rgba(139,148,158,0.4)' : 'rgba(100,100,120,0.4)' }}>
+                      no concepts matching "{searchQuery}"
+                    </p>
+                  </div>
+                )}
               </div>
-              <p className="text-xs mb-1" style={{ color: dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.6)' }}>
-                {viewMode === 'concepts' ? 'no concepts yet' : 'no connections yet'}
-              </p>
-              <p className="text-[11px]" style={{ color: dark ? 'rgba(139,148,158,0.3)' : 'rgba(100,100,120,0.4)' }}>
-                {emptyMessage}
-              </p>
             </div>
-          </div>
+          )
         ) : (
-          <svg
-            ref={svgRef}
-            className="flex-1 cursor-grab active:cursor-grabbing"
-            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
-            preserveAspectRatio="xMidYMid meet"
-            onMouseDown={handleSvgMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ userSelect: 'none', background: bg }}
-          >
-            <defs>
-              {/* Per-node radial glow gradients are created inline, but we define reusable filters here */}
+          /* ─── Notes Graph View ─── */
+          loading ? (
+            <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative w-12 h-12">
+                  <div className="absolute inset-0 rounded-full animate-ping" style={{ background: dark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(60, 100, 180, 0.08)' }} />
+                  <div className="absolute inset-2 rounded-full animate-pulse" style={{ background: dark ? 'rgba(88, 166, 255, 0.2)' : 'rgba(60, 100, 180, 0.12)' }} />
+                  <div className="absolute inset-4 rounded-full" style={{ background: dark ? '#58a6ff' : '#3c64b4' }} />
+                </div>
+                <span className="text-[11px] tracking-widest uppercase" style={{ color: dark ? 'rgba(139, 148, 158, 0.4)' : 'rgba(100, 100, 120, 0.5)' }}>
+                  mapping connections
+                </span>
+              </div>
+            </div>
+          ) : nodes.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
+              <div className="text-center max-w-xs">
+                <div className="mb-6 relative mx-auto" style={{ width: 80, height: 80 }}>
+                  <svg width="80" height="80" viewBox="0 0 80 80">
+                    <circle cx="20" cy="25" r="2" fill={dark ? '#58a6ff' : '#3c64b4'} opacity="0.3" />
+                    <circle cx="55" cy="18" r="1.5" fill={dark ? '#b392f0' : '#6a5acd'} opacity="0.25" />
+                    <circle cx="40" cy="50" r="2.5" fill={dark ? '#79c0ff' : '#4a80c4'} opacity="0.35" />
+                    <circle cx="65" cy="55" r="1.5" fill={dark ? '#c9d1d9' : '#666'} opacity="0.2" />
+                    <line x1="20" y1="25" x2="40" y2="50" stroke={dark ? '#58a6ff' : '#3c64b4'} strokeWidth="0.4" opacity="0.15" />
+                    <line x1="55" y1="18" x2="40" y2="50" stroke={dark ? '#b392f0' : '#6a5acd'} strokeWidth="0.4" opacity="0.12" />
+                    <line x1="40" y1="50" x2="65" y2="55" stroke={dark ? '#79c0ff' : '#4a80c4'} strokeWidth="0.4" opacity="0.1" />
+                  </svg>
+                </div>
+                <p className="text-xs mb-1" style={{ color: dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.6)' }}>no connections yet</p>
+                <p className="text-[11px]" style={{ color: dark ? 'rgba(139,148,158,0.3)' : 'rgba(100,100,120,0.4)' }}>
+                  create notes to see your knowledge graph
+                </p>
+              </div>
+            </div>
+          ) : (
+            <svg
+              ref={svgRef}
+              className="flex-1 cursor-grab active:cursor-grabbing"
+              viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+              preserveAspectRatio="xMidYMid meet"
+              onMouseDown={handleSvgMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{ userSelect: 'none', background: bg }}
+            >
+              <defs>
+                <filter id="glow-strong" x="-200%" y="-200%" width="500%" height="500%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur1" />
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
+                  <feMerge>
+                    <feMergeNode in="blur1" />
+                    <feMergeNode in="blur2" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="glow-soft" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="glow-medium" x="-150%" y="-150%" width="400%" height="400%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="glow-pulse" x="-300%" y="-300%" width="700%" height="700%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur1" />
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur2" />
+                  <feMerge>
+                    <feMergeNode in="blur1" />
+                    <feMergeNode in="blur2" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
 
-              {/* Hovered node: strong outer glow */}
-              <filter id="glow-strong" x="-200%" y="-200%" width="500%" height="500%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur1" />
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
-                <feMerge>
-                  <feMergeNode in="blur1" />
-                  <feMergeNode in="blur2" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
+              <rect
+                x={viewBox.x - 2000}
+                y={viewBox.y - 2000}
+                width={viewBox.w + 4000}
+                height={viewBox.h + 4000}
+                fill="transparent"
+              />
 
-              {/* Normal node: subtle ambient glow */}
-              <filter id="glow-soft" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
+              {edges.map((edge, i) => {
+                const s = nodeMap[edge.source]
+                const t = nodeMap[edge.target]
+                if (!s || !t) return null
 
-              {/* Neighbor node: medium glow */}
-              <filter id="glow-medium" x="-150%" y="-150%" width="400%" height="400%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
+                const sMatches = matchesSearch(s)
+                const tMatches = matchesSearch(t)
+                const hasSearch = searchQuery.trim()
 
-              {/* Pulsing glow ring for hovered node (animated via glowPhase) */}
-              <filter id="glow-pulse" x="-300%" y="-300%" width="700%" height="700%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur1" />
-                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur2" />
-                <feMerge>
-                  <feMergeNode in="blur1" />
-                  <feMergeNode in="blur2" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
+                if (hasSearch && !sMatches && !tMatches) return null
 
-            {/* Background rect for pan detection */}
-            <rect
-              x={viewBox.x - 2000}
-              y={viewBox.y - 2000}
-              width={viewBox.w + 4000}
-              height={viewBox.h + 4000}
-              fill="transparent"
-            />
+                const isHighlighted = hoveredNode && (edge.source === hoveredNode || edge.target === hoveredNode)
+                const dimmedByHover = hoveredNode && !isHighlighted
+                const dimmedBySearch = hasSearch && (!sMatches || !tMatches)
 
-            {/* Edges — straight thin lines */}
-            {edges.map((edge, i) => {
-              const s = nodeMap[edge.source]
-              const t = nodeMap[edge.target]
-              if (!s || !t) return null
+                let opacity
+                if (isHighlighted) opacity = 0.4
+                else if (dimmedByHover) opacity = 0.02
+                else if (dimmedBySearch) opacity = 0.03
+                else opacity = 0.06 + edge.weight * 0.09
 
-              const sMatches = matchesSearch(s)
-              const tMatches = matchesSearch(t)
-              const hasSearch = searchQuery.trim()
+                const width = isHighlighted ? 0.8 : 0.3 + edge.weight * 0.3
 
-              // When searching, hide edges between non-matching nodes
-              if (hasSearch && !sMatches && !tMatches) return null
+                return (
+                  <line
+                    key={`e-${i}`}
+                    x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+                    stroke={isHighlighted ? (dark ? '#79c0ff' : '#4a80c4') : edgeBaseColor}
+                    strokeWidth={width}
+                    strokeOpacity={opacity}
+                    style={{ transition: settled ? 'stroke-opacity 0.4s ease, stroke-width 0.4s ease' : undefined }}
+                  />
+                )
+              })}
 
-              const isHighlighted = hoveredNode && (edge.source === hoveredNode || edge.target === hoveredNode)
-              const dimmedByHover = hoveredNode && !isHighlighted
-              const dimmedBySearch = hasSearch && (!sMatches || !tMatches)
+              {nodes.map(node => {
+                const matches = matchesSearch(node)
+                const isHovered = hoveredNode === node.id
+                const isConnected = connectedSet.has(node.id)
+                const color = getNodeColor(node.degree, dark)
+                const r = nodeRadius(node)
+                const hasSearch = searchQuery.trim()
 
-              let opacity
-              if (isHighlighted) {
-                opacity = 0.4
-              } else if (dimmedByHover) {
-                opacity = 0.02
-              } else if (dimmedBySearch) {
-                opacity = 0.03
-              } else {
-                opacity = 0.06 + edge.weight * 0.09
-              }
+                let opacity
+                if (hasSearch && !matches) opacity = 0.04
+                else if (hoveredNode) {
+                  if (isHovered) opacity = 1
+                  else if (isConnected) opacity = 0.9
+                  else opacity = 0.06
+                } else if (hasSearch && matches) opacity = 1
+                else opacity = 0.85
 
-              const width = isHighlighted ? 0.8 : 0.3 + edge.weight * 0.3
+                let filter
+                if (isHovered) filter = 'url(#glow-pulse)'
+                else if (isConnected && hoveredNode) filter = 'url(#glow-medium)'
+                else filter = 'url(#glow-soft)'
 
-              return (
-                <line
-                  key={`e-${i}`}
-                  x1={s.x}
-                  y1={s.y}
-                  x2={t.x}
-                  y2={t.y}
-                  stroke={isHighlighted ? (dark ? '#79c0ff' : '#4a80c4') : edgeBaseColor}
-                  strokeWidth={width}
-                  strokeOpacity={opacity}
-                  style={{
-                    transition: settled ? 'stroke-opacity 0.4s ease, stroke-width 0.4s ease' : undefined,
-                  }}
-                />
-              )
-            })}
+                const showLabel = isHovered || (!hoveredNode && node.degree >= 5)
+                const nodeDisplayName = node.title || 'untitled'
+                const pulseR = r + 4 + glowPhase * 6
 
-            {/* Nodes */}
-            {nodes.map(node => {
-              const matches = matchesSearch(node)
-              const isHovered = hoveredNode === node.id
-              const isConnected = connectedSet.has(node.id)
-              const isConcept = viewMode === 'concepts'
-              const color = isConcept
-                ? getConceptColor(node.mastery_pct, dark)
-                : getNodeColor(node.degree, dark)
-              const r = nodeRadius(node)
-              const hasSearch = searchQuery.trim()
-
-              // Determine opacity
-              let opacity
-              if (hasSearch && !matches) {
-                opacity = 0.04
-              } else if (hoveredNode) {
-                if (isHovered) {
-                  opacity = 1
-                } else if (isConnected) {
-                  opacity = 0.9
-                } else {
-                  opacity = 0.06
-                }
-              } else if (hasSearch && matches) {
-                opacity = 1
-              } else {
-                opacity = 0.85
-              }
-
-              // Determine filter
-              let filter
-              if (isHovered) {
-                filter = 'url(#glow-pulse)'
-              } else if (isConnected && hoveredNode) {
-                filter = 'url(#glow-medium)'
-              } else {
-                filter = 'url(#glow-soft)'
-              }
-
-              // Show label: on hover always, on high-degree or concepts view when no hover
-              const showLabel = isHovered || (isConcept && !hoveredNode && node.degree >= 1) || (!hoveredNode && node.degree >= 5)
-              const nodeDisplayName = isConcept ? (node.label || 'unnamed') : (node.title || 'untitled')
-
-              // Glow ring radius for hovered node (pulsing)
-              const pulseR = r + 4 + glowPhase * 6
-
-              return (
-                <g
-                  key={`n-${node.id}`}
-                  style={{
-                    cursor: isConcept ? 'default' : 'pointer',
-                    opacity,
-                    transition: settled ? 'opacity 0.4s ease' : undefined,
-                  }}
-                  onMouseDown={e => handleNodeMouseDown(e, node.id)}
-                  onMouseEnter={() => setHoveredNode(node.id)}
-                  onMouseLeave={() => setHoveredNode(null)}
-                  onClick={(e) => {
-                    if (!dragNode) {
-                      e.stopPropagation()
-                      if (!isConcept) {
+                return (
+                  <g
+                    key={`n-${node.id}`}
+                    style={{
+                      cursor: 'pointer',
+                      opacity,
+                      transition: settled ? 'opacity 0.4s ease' : undefined,
+                    }}
+                    onMouseDown={e => handleNodeMouseDown(e, node.id)}
+                    onMouseEnter={() => setHoveredNode(node.id)}
+                    onMouseLeave={() => setHoveredNode(null)}
+                    onClick={(e) => {
+                      if (!dragNode) {
+                        e.stopPropagation()
                         navigate(`/notes/${node.id}`)
                       }
-                    }
-                  }}
-                >
-                  {/* Outer halo — subtle radial glow */}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r * 5}
-                    fill={color}
-                    opacity={isHovered ? 0.08 : 0.03}
-                    style={{ pointerEvents: 'none' }}
-                  />
-
-                  {/* Pulsing glow ring for hovered node */}
-                  {isHovered && (
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={pulseR}
-                      fill="none"
-                      stroke={color}
-                      strokeWidth={1}
-                      opacity={0.2 + glowPhase * 0.25}
-                      style={{ pointerEvents: 'none' }}
-                    />
-                  )}
-
-                  {/* Core luminous dot */}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={isHovered ? r * 1.5 : r}
-                    fill={color}
-                    filter={filter}
-                    style={{ transition: settled ? 'r 0.2s ease' : undefined }}
-                  />
-
-                  {/* Bright center spot — gives the star/luminous feel */}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={isHovered ? r * 0.5 : r * 0.35}
-                    fill="white"
-                    opacity={isHovered ? 0.6 : 0.25}
-                    style={{ pointerEvents: 'none' }}
-                  />
-
-                  {/* Hit area — invisible larger circle for easier hovering */}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={Math.max(r * 3, 12)}
-                    fill="transparent"
-                    style={{ cursor: isConcept ? 'default' : 'pointer' }}
-                  />
-
-                  {/* Label — clean sans-serif, appears on hover or for high-degree */}
-                  {showLabel && (
-                    <text
-                      x={node.x}
-                      y={node.y + (isHovered ? r * 1.5 : r) + 14}
-                      textAnchor="middle"
-                      fontSize={isHovered ? 11 : 8}
-                      fill={
-                        isHovered
-                          ? (dark ? '#c9d1d9' : '#333')
-                          : (dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.5)')
-                      }
-                      style={{
-                        pointerEvents: 'none',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-                        fontWeight: isHovered ? 500 : 400,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {nodeDisplayName}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-
-            {/* Hover tooltip — metadata above node */}
-            {hoveredNode && (() => {
-              const node = nodeMap[hoveredNode]
-              if (!node) return null
-              const r = nodeRadius(node) * 1.5
-              const isConcept = viewMode === 'concepts'
-
-              const tooltipColor = dark ? 'rgba(139,148,158,0.6)' : 'rgba(100,100,120,0.7)'
-
-              if (isConcept) {
-                const mastery = node.mastery_pct != null ? `${Math.round(node.mastery_pct)}% mastery` : 'no mastery data'
-                const noteCount = `${node.note_count || 0} note${(node.note_count || 0) !== 1 ? 's' : ''}`
-                return (
-                  <text
-                    x={node.x}
-                    y={node.y - r - 10}
-                    textAnchor="middle"
-                    fontSize={8}
-                    fill={tooltipColor}
-                    style={{
-                      pointerEvents: 'none',
-                      fontFamily: 'var(--font-mono, monospace)',
-                      letterSpacing: '0.06em',
                     }}
                   >
-                    {mastery} · {noteCount}
+                    <circle cx={node.x} cy={node.y} r={r * 5} fill={color} opacity={isHovered ? 0.08 : 0.03} style={{ pointerEvents: 'none' }} />
+                    {isHovered && (
+                      <circle cx={node.x} cy={node.y} r={pulseR} fill="none" stroke={color} strokeWidth={1} opacity={0.2 + glowPhase * 0.25} style={{ pointerEvents: 'none' }} />
+                    )}
+                    <circle cx={node.x} cy={node.y} r={isHovered ? r * 1.5 : r} fill={color} filter={filter} style={{ transition: settled ? 'r 0.2s ease' : undefined }} />
+                    <circle cx={node.x} cy={node.y} r={isHovered ? r * 0.5 : r * 0.35} fill="white" opacity={isHovered ? 0.6 : 0.25} style={{ pointerEvents: 'none' }} />
+                    <circle cx={node.x} cy={node.y} r={Math.max(r * 3, 12)} fill="transparent" style={{ cursor: 'pointer' }} />
+                    {showLabel && (
+                      <text
+                        x={node.x} y={node.y + (isHovered ? r * 1.5 : r) + 14}
+                        textAnchor="middle" fontSize={isHovered ? 11 : 8}
+                        fill={isHovered ? (dark ? '#c9d1d9' : '#333') : (dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.5)')}
+                        style={{ pointerEvents: 'none', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', fontWeight: isHovered ? 500 : 400, letterSpacing: '0.02em' }}
+                      >
+                        {nodeDisplayName}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+
+              {hoveredNode && (() => {
+                const node = nodeMap[hoveredNode]
+                if (!node) return null
+                const r = nodeRadius(node) * 1.5
+                const tooltipColor = dark ? 'rgba(139,148,158,0.6)' : 'rgba(100,100,120,0.7)'
+                return (
+                  <text
+                    x={node.x} y={node.y - r - 10}
+                    textAnchor="middle" fontSize={8} fill={tooltipColor}
+                    style={{ pointerEvents: 'none', fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.06em' }}
+                  >
+                    {node.degree} connection{node.degree !== 1 ? 's' : ''}
                   </text>
                 )
-              }
-
-              return (
-                <text
-                  x={node.x}
-                  y={node.y - r - 10}
-                  textAnchor="middle"
-                  fontSize={8}
-                  fill={tooltipColor}
-                  style={{
-                    pointerEvents: 'none',
-                    fontFamily: 'var(--font-mono, monospace)',
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  {node.degree} connection{node.degree !== 1 ? 's' : ''}
-                </text>
-              )
-            })()}
-          </svg>
+              })()}
+            </svg>
+          )
         )}
       </div>
     </Layout>

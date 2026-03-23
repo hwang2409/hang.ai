@@ -245,6 +245,9 @@ async def delete_folder(
     await db.commit()
 
 
+# Include sub-routers with static paths before /{doc_id} catch-all routes
+router.include_router(refactoring_router)
+
 # ── Access Info ───────────────────────────────────────────────────────────────
 
 @router.get("/{doc_id}/access", response_model=NoteAccessInfo)
@@ -787,4 +790,3 @@ router.include_router(sharing_router)
 router.include_router(export_router)
 router.include_router(linking_router)
 router.include_router(insights_router)
-router.include_router(refactoring_router)
