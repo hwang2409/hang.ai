@@ -99,7 +99,7 @@ export default function ImageSearch() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={mode === 'smart' ? 'describe what you\'re looking for...' : 'search query...'}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-bg text-text text-sm outline-none focus:border-[#333] transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-bg text-text text-sm outline-none focus:border-text-muted transition-colors"
               />
               <button
                 type="submit"
@@ -158,7 +158,7 @@ export default function ImageSearch() {
                   <div
                     key={r.img_src}
                     onClick={() => setLightbox(r)}
-                    className="break-inside-avoid mb-3 rounded-lg overflow-hidden border border-border cursor-pointer transition-colors hover:border-[#333]"
+                    className="break-inside-avoid mb-3 rounded-lg overflow-hidden border border-border cursor-pointer transition-colors hover:border-text-muted"
                     style={{ background: dark ? '#111' : '#f8f8f8' }}
                   >
                     <img
@@ -206,14 +206,17 @@ export default function ImageSearch() {
               className="max-w-[90vw] max-h-[80vh] rounded-xl block"
             />
             <div className="mt-3 flex justify-between items-center">
-              <p className="text-sm text-[#888] truncate max-w-[60%]">{lightbox.title}</p>
+              <p className="text-sm truncate max-w-[60%]" style={{ color: '#888' }}>{lightbox.title}</p>
               <div className="flex gap-2">
                 <a
                   href={lightbox.img_src}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="px-3 py-1.5 rounded-lg border border-[#333] bg-[#1a1a1a] text-[#aaa] text-xs no-underline hover:border-[#444] transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs no-underline transition-colors"
+                  style={{ border: '1px solid #333', background: '#1a1a1a', color: '#aaa' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#444'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}
                 >
                   open image
                 </a>
@@ -223,14 +226,20 @@ export default function ImageSearch() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="px-3 py-1.5 rounded-lg border border-[#333] bg-[#1a1a1a] text-[#aaa] text-xs no-underline hover:border-[#444] transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs no-underline transition-colors"
+                    style={{ border: '1px solid #333', background: '#1a1a1a', color: '#aaa' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = '#444'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}
                   >
                     source
                   </a>
                 )}
                 <button
                   onClick={() => setLightbox(null)}
-                  className="px-3 py-1.5 rounded-lg border border-[#333] bg-[#1a1a1a] text-[#aaa] text-xs cursor-pointer hover:border-[#444] transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors"
+                  style={{ border: '1px solid #333', background: '#1a1a1a', color: '#aaa' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#444'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}
                 >
                   close
                 </button>

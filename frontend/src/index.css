@@ -92,11 +92,14 @@ html.light body { background: #f5f3ee; color: #2a2a2a; }
 /* Surfaces */
 html.light [class*="bg-[#0a0a0a]"] { background-color: #f5f3ee !important; }
 html.light [class*="bg-[#0e0e0e]"] { background-color: #eae7e0 !important; }
-html.light [class*="bg-[#111111]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#111]"] { background-color: #ffffff !important; }
 html.light [class*="bg-[#131313]"] { background-color: #f7f5f0 !important; }
 html.light [class*="bg-[#141414]"] { background-color: #f0ede6 !important; }
 html.light [class*="bg-[#191919]"] { background-color: #e8e5de !important; }
-html.light [class*="bg-[#222222]"] { background-color: #ddd9d0 !important; }
+html.light [class*="bg-[#1a1a1a]"] { background-color: #eae7e0 !important; }
+html.light [class*="bg-[#222]"] { background-color: #ddd9d0 !important; }
+html.light [class*="bg-[#2a2a2a]"] { background-color: #ddd9d0 !important; }
+html.light [class*="bg-[#333]"] { background-color: #d5d1c8 !important; }
 html.light .bg-bg { background-color: #f5f3ee !important; }
 
 /* Text */
@@ -104,23 +107,40 @@ html.light [class*="text-[#d4d4d4]"] { color: #2a2a2a !important; }
 html.light [class*="text-[#e8e8e8]"] { color: #1a1a1a !important; }
 html.light [class*="text-[#e0e0e0]"] { color: #222222 !important; }
 html.light [class*="text-[#d8d8d8]"] { color: #333333 !important; }
+html.light [class*="text-[#ccc]"] { color: #444444 !important; }
+html.light [class*="text-[#bbb]"] { color: #555555 !important; }
 html.light [class*="text-[#b0b0b0]"] { color: #555555 !important; }
+html.light [class*="text-[#aaa]"] { color: #666666 !important; }
+html.light [class*="text-[#999]"] { color: #666666 !important; }
+html.light [class*="text-[#888]"] { color: #777777 !important; }
 html.light [class*="text-[#808080]"] { color: #666666 !important; }
+html.light [class*="text-[#666]"] { color: #888888 !important; }
 html.light [class*="text-[#606060]"] { color: #777777 !important; }
 html.light [class*="text-[#505050]"] { color: #888888 !important; }
+html.light [class*="text-[#444]"] { color: #999999 !important; }
 html.light [class*="text-[#404040]"] { color: #999999 !important; }
-html.light [class*="text-[#333333]"] { color: #aaaaaa !important; }
+html.light [class*="text-[#333]"] { color: #aaaaaa !important; }
 html.light [class*="text-[#2a2a2a]"] { color: #bbbbbb !important; }
+html.light [class*="text-[#1a1a1a]"] { color: #cccccc !important; }
 html.light .text-text { color: #2a2a2a !important; }
 html.light .text-text-secondary { color: #777777 !important; }
 
 /* Borders */
 html.light [class*="border-[#1c1c1c]"] { border-color: #ddd9d0 !important; }
-html.light [class*="border-[#2a2a2a]"] { border-color: #ccc8bf !important; }
 html.light [class*="border-[#1a1a1a]"] { border-color: #ddd9d0 !important; }
+html.light [class*="border-[#222]"] { border-color: #e0ddd6 !important; }
+html.light [class*="border-[#2a2a2a]"] { border-color: #ccc8bf !important; }
+html.light [class*="border-[#333]"] { border-color: #ddd9d0 !important; }
+html.light [class*="border-[#444]"] { border-color: #ccc8bf !important; }
+html.light [class*="border-[#606060]"] { border-color: #bbb7ae !important; }
+html.light [class*="border-[#d4d4d4]"] { border-color: #2a2a2a !important; }
+html.light [class*="border-[#ddd9d0]"] { border-color: #ccc8bf !important; }
 
 /* Placeholder text */
-html.light [class*="placeholder-[#333333]"]::placeholder { color: #bbbbbb !important; }
+html.light [class*="placeholder-[#333]"]::placeholder { color: #aaaaaa !important; }
+html.light [class*="placeholder-[#2a2a2a]"]::placeholder { color: #aaaaaa !important; }
+html.light [class*="placeholder-[#444]"]::placeholder { color: #999999 !important; }
+html.light [class*="placeholder-[#555]"]::placeholder { color: #888888 !important; }
 
 /* Inverted primary buttons (light text on dark bg → dark text on light bg) */
 html.light [class*="bg-[#d4d4d4]"] { background-color: #2a2a2a !important; color: #f5f3ee !important; }
