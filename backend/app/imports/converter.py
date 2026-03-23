@@ -46,7 +46,7 @@ SOURCE MATERIAL:
 """
 
 
-def convert_to_notes(text: str, source_name: str = "") -> dict:
+def convert_to_notes(text: str, source_name: str = "", anthropic_api_key: str | None = None) -> dict:
     """Use Claude to convert extracted text into structured study notes."""
     # Truncate very long content to avoid token limits
     max_chars = 80000
@@ -57,7 +57,8 @@ def convert_to_notes(text: str, source_name: str = "") -> dict:
     if source_name:
         prompt += f"\n\nSource: {source_name}"
 
-    response = client.messages.create(
+    c = anthropic.Anthropic(api_key=anthropic_api_key) if anthropic_api_key else client
+    response = c.messages.create(
         model=settings.CLAUDE_MODEL,
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],

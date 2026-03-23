@@ -42,7 +42,8 @@ async def cache_get(key: str) -> Optional[Any]:
     try:
         data = await _redis.get(key)
         return json.loads(data) if data else None
-    except Exception:
+    except Exception as e:
+        _logger.warning("cache_get failed for key %s: %s", key, e)
         return None
 
 
@@ -51,8 +52,8 @@ async def cache_set(key: str, value: Any, ttl: int = 300) -> None:
         return
     try:
         await _redis.set(key, json.dumps(value, default=str), ex=ttl)
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("cache_set failed for key %s: %s", key, e)
 
 
 async def cache_delete_pattern(pattern: str) -> None:
@@ -61,9 +62,12 @@ async def cache_delete_pattern(pattern: str) -> None:
         return
     try:
         keys = []
-        async for key in _redis.scan_iter(match=pattern):
+        async for key in _redis.scan_iter(match=pattern, count=500):
             keys.append(key)
+            if len(keys) >= 1000:
+                await _redis.delete(*keys)
+                keys = []
         if keys:
             await _redis.delete(*keys)
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.warning("cache_delete_pattern failed for %s: %s", pattern, e)

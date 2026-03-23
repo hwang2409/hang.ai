@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Highlighter, Search, Layers, FileText, BookOpen, Paintbrush } from 'lucide-react'
+import { Highlighter, Search, Layers, FileText, BookOpen, Paintbrush, Scissors, Zap } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
+import { api } from '../lib/api'
 
 const HIGHLIGHT_PRESET_COLORS = {
   yellow: '#fef08a',
@@ -18,12 +19,18 @@ const actions = [
   { id: 'flashcards', icon: Layers, label: 'cards' },
   { id: 'summarize', icon: FileText, label: 'summarize' },
   { id: 'define', icon: BookOpen, label: 'define' },
+  { id: 'extract', icon: Scissors, label: 'extract' },
 ]
 
 export default function SelectionToolbar({ position, onAction, onDismiss, allowedActions }) {
   const ref = useRef(null)
   const { dark } = useTheme()
   const [showColors, setShowColors] = useState(false)
+  const [customPrompts, setCustomPrompts] = useState([])
+
+  useEffect(() => {
+    api.get('/plugins/custom_prompts').then(setCustomPrompts).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -96,6 +103,22 @@ export default function SelectionToolbar({ position, onAction, onDismiss, allowe
               />
               <span className={`text-[9px] leading-none tracking-wide transition-colors duration-150 group-hover:text-[#8b7a3d] ${dark ? 'text-[#3a3a3a]' : 'text-[#b0a898]'}`}>
                 {action.label}
+              </span>
+            </button>
+          ))}
+          {customPrompts.map(cp => (
+            <button
+              key={`cp-${cp.id}`}
+              onClick={() => onAction(cp.name)}
+              className={`group relative flex flex-col items-center gap-0.5 px-3 py-2 transition-all duration-150 hover:bg-[rgba(196,167,89,0.08)]`}
+              style={{ borderLeft: `1px solid ${dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.06)'}` }}
+            >
+              <Zap
+                size={13}
+                className={`transition-colors duration-150 group-hover:text-[#c4a759] ${dark ? 'text-[#606060]' : 'text-[#998f80]'}`}
+              />
+              <span className={`text-[9px] leading-none tracking-wide transition-colors duration-150 group-hover:text-[#8b7a3d] ${dark ? 'text-[#3a3a3a]' : 'text-[#b0a898]'}`}>
+                {cp.label.length > 8 ? cp.label.slice(0, 7) + '\u2026' : cp.label}
               </span>
             </button>
           ))}

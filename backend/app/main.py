@@ -30,6 +30,14 @@ from app.dashboard.router import router as dashboard_router
 from app.lookups.router import router as lookups_router
 from app.quizzes.router import router as quizzes_router
 from app.integrations.router import router as integrations_router
+from app.social.router import router as social_router
+from app.forum.router import router as forum_router
+from app.notifications.router import router as notifications_router
+from app.knowledge.router import router as knowledge_router
+from app.automations.router import router as automations_router
+from app.timeline.router import router as timeline_router
+from app.reviews.router import router as reviews_router
+from app.plugins.router import router as plugins_router
 
 
 @asynccontextmanager
@@ -43,6 +51,11 @@ async def lifespan(app: FastAPI):
     os.makedirs("media/files", exist_ok=True)
     check_settings()
     await init_db()
+    # Mount plugin routes
+    from app.plugins.loader import PLUGIN_REGISTRY
+    for plugin_id, info in PLUGIN_REGISTRY.items():
+        if info.router:
+            app.include_router(info.router, prefix=f"/plugins/{plugin_id}", tags=[f"plugin:{plugin_id}"])
     await init_cache()
     # Backfill embeddings in background (non-blocking)
     from app.search.service import backfill_embeddings
@@ -56,14 +69,26 @@ app = FastAPI(title="Neuronic API", lifespan=lifespan, redirect_slashes=False)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+from app.llm.service import ApiKeyRequiredError
+
+
+@app.exception_handler(ApiKeyRequiredError)
+async def api_key_required_handler(request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=402,
+        content={"detail": "api_key_required", "message": str(exc)},
+    )
+
 # Middleware runs in reverse order: last added = outermost (runs first)
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -84,6 +109,14 @@ app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(lookups_router, prefix="/lookups", tags=["lookups"])
 app.include_router(quizzes_router, prefix="/quizzes", tags=["quizzes"])
 app.include_router(integrations_router, prefix="/integrations", tags=["integrations"])
+app.include_router(social_router, prefix="/social", tags=["social"])
+app.include_router(forum_router, prefix="/forum", tags=["forum"])
+app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
+app.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
+app.include_router(automations_router, prefix="/automations", tags=["automations"])
+app.include_router(timeline_router, prefix="/timeline", tags=["timeline"])
+app.include_router(reviews_router, prefix="/reviews", tags=["reviews"])
+app.include_router(plugins_router, prefix="/plugins", tags=["plugins"])
 
 
 @app.get("/health")

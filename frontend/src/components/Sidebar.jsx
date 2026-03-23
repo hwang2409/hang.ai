@@ -1,11 +1,19 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Menu, X, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { usePlugins } from '../contexts/PluginContext'
+import NotificationBell from './NotificationBell'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+  const morePaths = ['/feynman', '/pomodoro', '/studyplan', '/knowledge-graph', '/timeline', '/automations', '/groups', '/forum', '/wiki']
+  const isOnMorePage = morePaths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'))
+  const [moreOpen, setMoreOpen] = useState(isOnMorePage)
+  const navigate = useNavigate()
+  const pluginCtx = usePlugins()
 
   const mainItems = [
     { to: '/', label: 'notes' },
@@ -16,12 +24,21 @@ export default function Sidebar() {
 
   const studyItems = [
     { to: '/flashcards', label: 'flashcards' },
-    { to: '/feynman', label: 'feynman' },
+    { to: '/reviews', label: 'reviews' },
     { to: '/quizzes', label: 'quizzes' },
-    { to: '/pomodoro', label: 'pomodoro' },
     { to: '/todos', label: 'todos' },
+  ]
+
+  const moreItems = [
+    { to: '/feynman', label: 'feynman' },
+    { to: '/pomodoro', label: 'pomodoro' },
     { to: '/studyplan', label: 'study plan' },
     { to: '/knowledge-graph', label: 'knowledge graph' },
+    { to: '/timeline', label: 'timeline' },
+    { to: '/automations', label: 'automations' },
+    { to: '/groups', label: 'study groups' },
+    { to: '/forum', label: 'forum' },
+    { to: '/wiki', label: 'wiki' },
   ]
 
   const adminItems = [
@@ -40,12 +57,15 @@ export default function Sidebar() {
         <span className="text-lg font-semibold text-text tracking-tight">
           neuronic
         </span>
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="lg:hidden text-text-secondary hover:text-text transition-colors"
-        >
-          <X size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden text-text-secondary hover:text-text transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -76,6 +96,36 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
+        {/* More tools */}
+        <div className="border-t border-border my-4" />
+        <button
+          onClick={() => setMoreOpen(o => !o)}
+          className="flex items-center justify-between w-full pl-4 pr-2 py-1 text-[10px] uppercase tracking-widest text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <span>more</span>
+          <ChevronDown size={12} className={`transition-transform duration-200 ${moreOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {moreOpen && moreItems.map(({ to, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={linkClasses}
+            onClick={() => setMobileOpen(false)}
+          >
+            {label}
+          </NavLink>
+        ))}
+        {moreOpen && pluginCtx?.getNavItems('more').map(({ to, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={linkClasses}
+            onClick={() => setMobileOpen(false)}
+          >
+            {label}
+          </NavLink>
+        ))}
+
         {user?.is_admin && (
           <>
             <div className="border-t border-border my-4" />
@@ -95,31 +145,43 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="px-5 py-4 border-t border-border space-y-1">
-        {[
-          { to: '/wiki', label: 'wiki' },
-          { to: '/settings', label: 'settings' },
-          { to: '/integrations', label: 'integrations' },
-        ].map(({ to, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              isActive
-                ? 'block py-1.5 text-xs text-text-secondary transition-colors'
-                : 'block py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors'
-            }
-            onClick={() => setMobileOpen(false)}
-          >
-            {label}
-          </NavLink>
-        ))}
-        <button
-          onClick={logout}
-          className="block w-full text-left py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors bg-transparent border-0 p-0 cursor-pointer mt-2"
+      <div className="px-5 py-4 border-t border-border">
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            isActive
+              ? 'block py-1.5 text-xs text-text-secondary transition-colors'
+              : 'block py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors'
+          }
+          onClick={() => setMobileOpen(false)}
         >
-          log out
-        </button>
+          settings
+        </NavLink>
+        <div className="border-t border-border mt-3 pt-3 flex items-center gap-2.5">
+          <div
+            onClick={() => { setMobileOpen(false); if (user?.id) navigate(`/profile/${user.id}`) }}
+            className="w-6 h-6 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-[10px] font-medium text-text-secondary flex-shrink-0 cursor-pointer hover:border-[#c4a759] transition-colors"
+          >
+            {user?.username?.[0]?.toUpperCase() || '?'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <span
+              onClick={() => { setMobileOpen(false); if (user?.id) navigate(`/profile/${user.id}`) }}
+              className="block text-xs text-text truncate cursor-pointer hover:text-[#c4a759] transition-colors"
+            >
+              {user?.username}
+            </span>
+            {user?.reputation != null && (
+              <span className="block text-[10px] text-[#c4a759]">{user.reputation} rep</span>
+            )}
+          </div>
+          <button
+            onClick={logout}
+            className="text-[10px] text-text-muted hover:text-text-secondary transition-colors flex-shrink-0"
+          >
+            log out
+          </button>
+        </div>
       </div>
     </>
   )

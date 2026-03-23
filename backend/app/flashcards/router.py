@@ -35,9 +35,12 @@ from app.flashcards.dedup import (
     normalize_front,
 )
 from app.flashcards.sm2 import apply_sm2
+from app.crypto import decrypt_api_key
 from app.llm.service import evaluate_text
+from app.llm.context import get_learner_context, inject_learner_context
 from app.llm.response_parser import parse_llm_json
 from app.rate_limit import limiter
+from app.automations.engine import fire_event
 
 router = APIRouter()
 
@@ -393,6 +396,16 @@ async def review_flashcard(
 
     background_tasks.add_task(_check_and_fire)
 
+    from app.social.activity import log_activity
+    background_tasks.add_task(
+        log_activity, current_user.id, "flashcard_review",
+        {"card_id": card_id, "quality": body.quality},
+    )
+
+    background_tasks.add_task(fire_event, current_user.id, "flashcard_reviewed", {
+        "card_id": card_id, "quality": body.quality, "note_id": card.note_id,
+    })
+
     return card
 
 
@@ -438,7 +451,18 @@ async def generate_flashcards(
             f"existing flashcards:\n{existing_list}"
         )
 
-    raw_response = await evaluate_text(prompt)
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
+    learner_ctx = await get_learner_context(db, current_user)
+    from app.llm.prompts import VOICE
+    system = inject_learner_context(VOICE, learner_ctx)
+
+    raw_response = await evaluate_text(prompt, system_prompt=system, api_key=api_key)
 
     try:
         cards_data = parse_llm_json(raw_response)
@@ -488,7 +512,7 @@ async def generate_flashcards(
 
     # Phase 3: Semantic dedup via LLM (only on surviving cards)
     if deduped_batch and existing_fronts:
-        semantic_dup_indices = await find_semantic_duplicates(deduped_batch, existing_fronts)
+        semantic_dup_indices = await find_semantic_duplicates(deduped_batch, existing_fronts, api_key=api_key)
         final: list[dict] = []
         for i, item in enumerate(deduped_batch):
             if i in semantic_dup_indices:

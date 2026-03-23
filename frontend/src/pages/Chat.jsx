@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Send, Trash2, Globe, ExternalLink } from 'lucide-react'
+import { Plus, Send, Trash2, Globe, ExternalLink, FileText } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatRelativeDate } from '../lib/formatDate'
 import { useChat } from '../hooks/useChat'
@@ -32,8 +32,26 @@ const SearchResultCard = ({ result }) => {
   )
 }
 
+const NoteResultCard = ({ result }) => {
+  const snippet = result.snippet?.length > 150 ? result.snippet.slice(0, 150) + '...' : result.snippet
+  return (
+    <a
+      href={`/notes/${result.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded px-2.5 py-1.5 bg-bg-secondary border border-border hover:border-[#2a2a2a] transition-colors group"
+    >
+      <div className="flex items-center gap-1.5">
+        <FileText size={10} className="text-text-muted flex-shrink-0" />
+        <span className="text-xs text-text-secondary group-hover:text-text truncate transition-colors">{result.title}</span>
+      </div>
+      {snippet && <p className="text-[10px] text-text-muted truncate mt-0.5">{snippet}</p>}
+    </a>
+  )
+}
+
 const ChatMessageBubble = ({ msg, streaming, isLast }) => {
-  const isEmptyStreaming = streaming && msg.role === 'assistant' && !msg.content && !msg.searchStatus && !msg.searchResults && isLast
+  const isEmptyStreaming = streaming && msg.role === 'assistant' && !msg.content && !msg.searchStatus && !msg.searchResults && !msg.noteSearchStatus && !msg.noteResults && isLast
   if (isEmptyStreaming) return null
 
   return (
@@ -69,6 +87,25 @@ const ChatMessageBubble = ({ msg, streaming, isLast }) => {
               </div>
             </div>
           ))}
+
+          {msg.noteSearchStatus?.searching && (
+            <div className="flex items-center gap-2 text-xs text-text-secondary mb-2 pb-2 border-b border-border">
+              <FileText size={12} className="animate-pulse" />
+              <span>searching your notes{msg.noteSearchStatus.query ? `: ${msg.noteSearchStatus.query}` : '...'}</span>
+            </div>
+          )}
+
+          {msg.noteResults?.length > 0 && (
+            <div className="mb-3 pb-2 border-b border-border">
+              <div className="flex items-center gap-1.5 text-[10px] text-text-secondary mb-1.5">
+                <FileText size={10} />
+                <span>from your notes</span>
+              </div>
+              <div className="space-y-1.5">
+                {msg.noteResults.slice(0, 5).map((r, ri) => <NoteResultCard key={ri} result={r} />)}
+              </div>
+            </div>
+          )}
 
           {msg.role === 'assistant' ? (
             <MarkdownRenderer content={msg.content} />
@@ -207,7 +244,8 @@ export default function Chat() {
   const showStreamingDots = streaming && messages.length > 0 &&
     messages[messages.length - 1].role === 'assistant' &&
     !messages[messages.length - 1].content &&
-    !messages[messages.length - 1].searchStatus
+    !messages[messages.length - 1].searchStatus &&
+    !messages[messages.length - 1].noteSearchStatus
 
   return (
     <Layout>

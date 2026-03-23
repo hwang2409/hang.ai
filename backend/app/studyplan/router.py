@@ -17,7 +17,9 @@ from app.studyplan.schemas import (
     StudyPlanResponse,
 )
 from app.todos.models import TodoItem
+from app.crypto import decrypt_api_key
 from app.llm.service import evaluate_text
+from app.llm.context import get_learner_context, inject_learner_context
 
 router = APIRouter()
 
@@ -59,7 +61,18 @@ Rules:
 - Include review days before the exam
 - Keep descriptions actionable and specific"""
 
-    raw_response = await evaluate_text(prompt)
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
+    learner_ctx = await get_learner_context(db, current_user)
+    from app.llm.prompts import VOICE
+    system = inject_learner_context(VOICE, learner_ctx)
+
+    raw_response = await evaluate_text(prompt, system_prompt=system, api_key=api_key)
 
     try:
         plan_data = _parse_llm_json(raw_response)
@@ -259,10 +272,13 @@ async def update_study_plan_item(
     if body.completed is not None:
         item.completed = body.completed
 
-        # Also update the linked todo if it exists
+        # Also update the linked todo if it exists (verify ownership)
         if item.todo_id:
             todo_result = await db.execute(
-                select(TodoItem).where(TodoItem.id == item.todo_id)
+                select(TodoItem).where(
+                    TodoItem.id == item.todo_id,
+                    TodoItem.user_id == current_user.id,
+                )
             )
             todo = todo_result.scalar_one_or_none()
             if todo:
@@ -299,7 +315,18 @@ async def delete_study_plan(
         select(StudyPlanItem).where(StudyPlanItem.plan_id == plan.id)
     )
     items = items_result.scalars().all()
+    # Delete linked TodoItems to prevent orphans
     for item in items:
+        if item.todo_id:
+            todo_result = await db.execute(
+                select(TodoItem).where(
+                    TodoItem.id == item.todo_id,
+                    TodoItem.user_id == current_user.id,
+                )
+            )
+            todo = todo_result.scalar_one_or_none()
+            if todo:
+                await db.delete(todo)
         await db.delete(item)
 
     await db.delete(plan)

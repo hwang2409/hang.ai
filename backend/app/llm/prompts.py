@@ -18,7 +18,10 @@ def _sys(extra: str) -> str:
 
 
 GENERAL_CHAT_SYSTEM = _sys(
-    "Help the user research topics, answer questions, and study effectively."
+    "Help the user research topics, answer questions, and study effectively. "
+    "You have access to the user's note library — use the search_notes tool to find "
+    "relevant notes when answering questions about topics they've studied. "
+    "When referencing their notes, mention the note title so they can find it."
 )
 
 TASK_PROMPTS = {

@@ -21,7 +21,7 @@ Everything is designed to help you capture, connect, and retain knowledge. Write
 
 Notes auto-save as you type — you'll see a small status indicator showing "saved", "saving...", or "unsaved" near the top of the editor.
 
-**Tip:** Use **Cmd+K** (or Ctrl+K) to quickly search across all your notes at any time.`,
+**Tip:** Use **Cmd+K** (or Ctrl+K) to search notes, and **Cmd+P** (or Ctrl+P) to open the command palette.`,
       },
       {
         id: 'navigation',
@@ -481,7 +481,8 @@ The graph uses a force-directed layout that naturally clusters related notes tog
 
 | Shortcut | Action |
 |----------|--------|
-| **Cmd+K** | Open search |
+| **Cmd+K** | Search notes |
+| **Cmd+P** | Command palette |
 | **Esc** | Close modals and search |`,
       },
       {

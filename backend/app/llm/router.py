@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
+from app.crypto import decrypt_api_key
 from app.deps import get_db, get_current_user
 from app.database import async_session
 from app.auth.models import User
@@ -17,12 +18,14 @@ from app.llm.schemas import (
     EvaluateRequest, EvaluateResponse,
     SelectionActionRequest, SelectionActionResponse,
 )
-from app.llm.service import stream_chat_with_tools, evaluate_text
-from app.llm.tools import NOTE_EDIT_TOOL, CANVAS_EDIT_TOOL, MOODBOARD_EDIT_TOOL, WEB_SEARCH_TOOL, SEARCH_IMAGES_TOOL, execute_tool
+from app.llm.service import stream_chat_with_tools, evaluate_text, ApiKeyRequiredError
+from app.llm.context import get_learner_context, inject_learner_context, retrieve_relevant_notes, format_notes_context
+from app.llm.tools import NOTE_EDIT_TOOL, CANVAS_EDIT_TOOL, MOODBOARD_EDIT_TOOL, WEB_SEARCH_TOOL, SEARCH_IMAGES_TOOL, SEARCH_NOTES_TOOL, execute_tool
 from app.llm.prompts import (
     GENERAL_CHAT_SYSTEM,
     TASK_PROMPTS,
     SELECTION_ACTION_PROMPTS,
+    VOICE,
     build_note_system_prompt,
     build_canvas_system_prompt,
     build_moodboard_system_prompt,
@@ -37,6 +40,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_TOOL_ROUNDS = 5
+
+
+def _get_anthropic_key(user: User) -> str | None:
+    if user.encrypted_anthropic_key:
+        try:
+            return decrypt_api_key(user.encrypted_anthropic_key)
+        except Exception:
+            return None
+    return None
 
 
 def _format_sse_event(data: dict) -> bytes:
@@ -58,12 +70,12 @@ async def _get_thread_or_404(
     return thread
 
 
-async def _execute_tools_and_collect(tool_calls, db, note_id):
+async def _execute_tools_and_collect(tool_calls, db, note_id, user_id=None):
     """Execute tool calls and return (tool_results, sse_events)."""
     tool_results = []
     sse_events = []
     for tc in tool_calls:
-        result_text, events = await execute_tool(tc, db, note_id)
+        result_text, events = await execute_tool(tc, db, note_id, user_id=user_id)
         sse_events.extend(events)
         tool_results.append({
             "type": "tool_result",
@@ -119,10 +131,10 @@ async def chat(
                 uploaded_file.extracted_text,
                 body.selected_text,
             )
-            tools = [WEB_SEARCH_TOOL]
+            tools = [WEB_SEARCH_TOOL, SEARCH_NOTES_TOOL]
         else:
             system_prompt = GENERAL_CHAT_SYSTEM
-            tools = [WEB_SEARCH_TOOL]
+            tools = [WEB_SEARCH_TOOL, SEARCH_NOTES_TOOL]
     elif thread.note_id:
         result = await db.execute(select(Document).where(Document.id == thread.note_id))
         note = result.scalar_one_or_none()
@@ -130,7 +142,7 @@ async def chat(
             if note.type == "canvas":
                 text_summary, images = parse_canvas_content(note.content)
                 system_prompt = build_canvas_system_prompt(text_summary, body.selected_text)
-                tools = [CANVAS_EDIT_TOOL, SEARCH_IMAGES_TOOL]
+                tools = [CANVAS_EDIT_TOOL, SEARCH_IMAGES_TOOL, SEARCH_NOTES_TOOL]
             elif note.type == "moodboard":
                 # Build items summary for moodboard
                 try:
@@ -150,18 +162,24 @@ async def chat(
                 except Exception:
                     items_summary = "(empty moodboard)"
                 system_prompt = build_moodboard_system_prompt(items_summary, body.selected_text)
-                tools = [MOODBOARD_EDIT_TOOL, SEARCH_IMAGES_TOOL]
+                tools = [MOODBOARD_EDIT_TOOL, SEARCH_IMAGES_TOOL, SEARCH_NOTES_TOOL]
             else:
                 system_prompt = build_note_system_prompt(note.content, body.selected_text)
-                tools = [NOTE_EDIT_TOOL, WEB_SEARCH_TOOL]
+                tools = [NOTE_EDIT_TOOL, WEB_SEARCH_TOOL, SEARCH_NOTES_TOOL]
         else:
             system_prompt = GENERAL_CHAT_SYSTEM
-            tools = [WEB_SEARCH_TOOL]
+            tools = [WEB_SEARCH_TOOL, SEARCH_NOTES_TOOL]
     else:
         system_prompt = GENERAL_CHAT_SYSTEM
         if body.selected_text:
             system_prompt += f'\n\nThe user has selected this passage to focus on:\n"{body.selected_text}"'
-        tools = [WEB_SEARCH_TOOL]
+        tools = [WEB_SEARCH_TOOL, SEARCH_NOTES_TOOL]
+
+        # Auto-RAG: inject relevant notes context for general chat
+        rag_results = await retrieve_relevant_notes(db, current_user.id, body.message, limit=3)
+        if rag_results:
+            notes_context = format_notes_context(rag_results)
+            system_prompt += f"\n\n{notes_context}"
 
     # Load conversation history
     result = await db.execute(
@@ -173,6 +191,10 @@ async def chat(
 
     thread_id = thread.id
     note_id = thread.note_id
+    user_api_key = _get_anthropic_key(current_user)
+
+    learner_ctx = await get_learner_context(db, current_user)
+    system_prompt = inject_learner_context(system_prompt, learner_ctx)
 
     async def event_generator() -> AsyncGenerator[bytes, None]:
         full_response = ""
@@ -187,7 +209,8 @@ async def chat(
                     assistant_content_from_api = None
 
                     async for event_type, data in stream_chat_with_tools(
-                        current_messages, system_prompt, tools, images=images
+                        current_messages, system_prompt, tools, images=images,
+                        api_key=user_api_key,
                     ):
                         if event_type == "text":
                             round_text += data
@@ -221,12 +244,15 @@ async def chat(
 
                     # Execute tools and collect results
                     tool_results, sse_events = await _execute_tools_and_collect(
-                        tool_calls, gen_db, note_id,
+                        tool_calls, gen_db, note_id, user_id=current_user.id,
                     )
                     for evt in sse_events:
                         yield _format_sse_event(evt)
                     current_messages.append({"role": "user", "content": tool_results})
 
+            except ApiKeyRequiredError as e:
+                yield _format_sse_event({"type": "error", "content": str(e), "code": "api_key_required"})
+                return
             except Exception as e:
                 logger.exception("Chat stream error")
                 yield _format_sse_event({"type": "error", "content": str(e)})
@@ -321,13 +347,16 @@ async def delete_thread(
 async def evaluate(
     request: Request,
     body: EvaluateRequest,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if body.task not in TASK_PROMPTS:
         raise HTTPException(status_code=400, detail=f"Unknown task: {body.task}. Must be one of: {list(TASK_PROMPTS.keys())}")
 
     prompt = TASK_PROMPTS[body.task].format(content=body.content)
-    result = await evaluate_text(prompt)
+    learner_ctx = await get_learner_context(db, current_user)
+    system = inject_learner_context(VOICE, learner_ctx)
+    result = await evaluate_text(prompt, system_prompt=system, api_key=_get_anthropic_key(current_user))
     return EvaluateResponse(result=result)
 
 
@@ -336,19 +365,34 @@ async def evaluate(
 async def selection_action(
     request: Request,
     body: SelectionActionRequest,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if body.action not in SELECTION_ACTION_PROMPTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown action: {body.action}. Must be one of: {list(SELECTION_ACTION_PROMPTS.keys())}",
+    if body.action in SELECTION_ACTION_PROMPTS:
+        prompt = SELECTION_ACTION_PROMPTS[body.action].format(text=body.selected_text)
+    else:
+        # Fallback: check custom prompts from plugin
+        from plugins.custom_prompts.models import CustomPrompt
+        cp_result = await db.execute(
+            select(CustomPrompt).where(
+                CustomPrompt.user_id == current_user.id,
+                CustomPrompt.name == body.action,
+            )
         )
-
-    prompt = SELECTION_ACTION_PROMPTS[body.action].format(text=body.selected_text)
+        custom = cp_result.scalar_one_or_none()
+        if custom:
+            prompt = custom.prompt_template.replace("{text}", body.selected_text)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown action: {body.action}. Must be one of: {list(SELECTION_ACTION_PROMPTS.keys())}",
+            )
     from app.llm.prompts import VOICE
     system = VOICE
     if body.note_context:
         system += f"\n\nThis passage comes from a larger document:\n{body.note_context[:2000]}"
+    learner_ctx = await get_learner_context(db, current_user)
+    system = inject_learner_context(system, learner_ctx)
 
-    result = await evaluate_text(prompt, system_prompt=system)
+    result = await evaluate_text(prompt, system_prompt=system, api_key=_get_anthropic_key(current_user))
     return SelectionActionResponse(result=result)

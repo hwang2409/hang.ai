@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || ''  // empty = vite proxy in dev
 
+let redirecting = false
+
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers }
   const token = getToken()
@@ -7,9 +9,19 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (res.status === 401) {
-    localStorage.removeItem('token')
-    window.location.href = '/login'
+    if (!redirecting) {
+      redirecting = true
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+    }
     throw new Error('Unauthorized')
+  }
+  if (res.status === 402) {
+    const data = await res.json().catch(() => ({}))
+    if (data.detail === 'api_key_required') {
+      window.dispatchEvent(new CustomEvent('api-key-required'))
+      throw new Error('API key required')
+    }
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -41,9 +53,19 @@ export const api = {
       body: formData,
     })
     if (res.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+      if (!redirecting) {
+        redirecting = true
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+      }
       throw new Error('Unauthorized')
+    }
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({}))
+      if (data.detail === 'api_key_required') {
+        window.dispatchEvent(new CustomEvent('api-key-required'))
+        throw new Error('API key required')
+      }
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -76,6 +98,13 @@ export const api = {
       },
       body: JSON.stringify(data),
     })
+    if (res.status === 402) {
+      const errData = await res.json().catch(() => ({}))
+      if (errData.detail === 'api_key_required') {
+        window.dispatchEvent(new CustomEvent('api-key-required'))
+        throw new Error('API key required')
+      }
+    }
     if (!res.ok) throw new Error('Stream failed')
     const reader = res.body.getReader()
     const decoder = new TextDecoder()

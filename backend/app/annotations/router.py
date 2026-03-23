@@ -132,9 +132,9 @@ async def export_annotations(
     from app.config import settings
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         user_id = int(payload.get("sub"))
-    except (JWTError, Exception):
+    except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # Get document annotations

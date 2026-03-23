@@ -8,10 +8,11 @@ logger = logging.getLogger(__name__)
 WHISPER_MAX_BYTES = 25 * 1024 * 1024  # 25MB Whisper limit
 
 
-async def transcribe_audio(file_path: str) -> str | None:
+async def transcribe_audio(file_path: str, openai_api_key: str | None = None) -> str | None:
     """Transcribe an audio file using OpenAI Whisper API. Returns None if unavailable."""
-    if not settings.OPENAI_API_KEY:
-        logger.info("OPENAI_API_KEY not set, skipping transcription")
+    api_key = openai_api_key or settings.OPENAI_API_KEY
+    if not api_key:
+        logger.info("No OpenAI API key available, skipping transcription")
         return None
 
     file_size = os.path.getsize(file_path)
@@ -22,7 +23,7 @@ async def transcribe_audio(file_path: str) -> str | None:
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=api_key)
         with open(file_path, "rb") as f:
             transcript = await client.audio.transcriptions.create(
                 model="whisper-1",
@@ -34,9 +35,9 @@ async def transcribe_audio(file_path: str) -> str | None:
         return None
 
 
-async def transcribe_audio_background(file_id: int, file_path: str):
+async def transcribe_audio_background(file_id: int, file_path: str, openai_api_key: str | None = None):
     """Background task to transcribe audio and save to DB."""
-    transcript = await transcribe_audio(file_path)
+    transcript = await transcribe_audio(file_path, openai_api_key=openai_api_key)
     if not transcript:
         return
 

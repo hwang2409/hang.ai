@@ -55,7 +55,7 @@ async def find_exact_duplicates_batch(
 
 
 async def find_semantic_duplicates(
-    new_cards: list[dict], existing_fronts: list[str]
+    new_cards: list[dict], existing_fronts: list[str], api_key: str | None = None,
 ) -> list[int]:
     """Use LLM to find semantically duplicate questions.
 
@@ -81,7 +81,7 @@ async def find_semantic_duplicates(
     )
 
     try:
-        raw = await evaluate_text(prompt)
+        raw = await evaluate_text(prompt, api_key=api_key)
         indices = parse_llm_json(raw)
         if not isinstance(indices, list):
             return []

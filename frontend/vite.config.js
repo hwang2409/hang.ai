@@ -25,6 +25,14 @@ export default defineConfig({
       '/integrations': 'http://localhost:8000',
       '/studyplan': 'http://localhost:8000',
       '/dashboard': 'http://localhost:8000',
+      '/social': 'http://localhost:8000',
+      '/forum': 'http://localhost:8000',
+      '/notifications': 'http://localhost:8000',
+      '/plugins': 'http://localhost:8000',
+      '/reviews': 'http://localhost:8000',
+      '/knowledge': 'http://localhost:8000',
+      '/automations': 'http://localhost:8000',
+      '/timeline': 'http://localhost:8000',
     }
   }
 })

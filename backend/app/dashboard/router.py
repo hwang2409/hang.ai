@@ -7,12 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.cache import cache_get, cache_set
+from app.notifications.helpers import create_notification
+from app.notifications.models import Notification
 from app.flashcards.models import Flashcard, FlashcardReview
 from app.feynman.models import FeynmanSession
 from app.todos.models import TodoItem
 from app.notes.models import Document
 from app.pomodoro.models import StudySession
 from app.quizzes.models import Quiz, QuizAttempt
+from app.reviews.models import ReviewSchedule
 from app.dashboard.schemas import (
     BriefItem,
     DashboardReview,
@@ -173,6 +176,15 @@ async def get_review(
         )
     )
     due_flashcard_count = count_result.scalar() or 0
+
+    # 1b. Due note reviews
+    review_count_result = await db.execute(
+        select(sa_func.count(ReviewSchedule.id)).where(
+            ReviewSchedule.user_id == current_user.id,
+            ReviewSchedule.next_review <= now,
+        )
+    )
+    due_review_count = review_count_result.scalar() or 0
 
     # 2. Weak topics (Feynman sessions with score < 60)
     weak_q = (
@@ -430,6 +442,19 @@ async def get_review(
             )
         )
 
+    # Note reviews due → priority 2
+    if due_review_count > 0:
+        brief_items.append(
+            BriefItem(
+                type="note_review",
+                priority=2,
+                title=f"Review {due_review_count} note{'s' if due_review_count != 1 else ''} due for spaced repetition",
+                subtitle="",
+                link="/reviews",
+                meta={"count": due_review_count},
+            )
+        )
+
     # Stale notes → priority 3
     for n in stale_notes:
         brief_items.append(
@@ -447,11 +472,12 @@ async def get_review(
     type_order = {
         "overdue_todo": 0,
         "flashcard_review": 1,
-        "study_plan": 2,
-        "quiz_retake": 3,
-        "feynman_retry": 4,
-        "upcoming_todo": 5,
-        "stale_note": 6,
+        "note_review": 2,
+        "study_plan": 3,
+        "quiz_retake": 4,
+        "feynman_retry": 5,
+        "upcoming_todo": 6,
+        "stale_note": 7,
     }
     brief_items.sort(key=lambda x: (x.priority, type_order.get(x.type, 99)))
 
@@ -466,6 +492,7 @@ async def get_review(
     est_minutes += len(quiz_retakes) * 10  # ~10 min per quiz retake
     est_minutes += len(weak_topics) * 10  # ~10 min per Feynman retry
     est_minutes += len(overdue_todos) * 5  # ~5 min per overdue todo
+    est_minutes += 3 * min(due_review_count, 20)  # ~3 min per note review, cap 20
 
     # 12. Greeting — narrative summary
     hour = datetime.now().hour
@@ -487,6 +514,8 @@ async def get_review(
         parts.append(f"{len(quiz_retakes)} quiz{'zes' if len(quiz_retakes) != 1 else ''} to retake")
     if weak_topics:
         parts.append(f"{len(weak_topics)} weak topic{'s' if len(weak_topics) != 1 else ''} to review")
+    if due_review_count > 0:
+        parts.append(f"{due_review_count} note{'s' if due_review_count != 1 else ''} due for review")
 
     if not parts:
         greeting = f"{time_greeting} — you're all caught up. nice work."
@@ -509,6 +538,7 @@ async def get_review(
         current_streak=streak,
         quiz_retakes=quiz_retakes,
         brief_items=brief_items,
+        due_review_count=due_review_count,
         greeting=greeting,
         study_next=study_next,
         estimated_minutes=est_minutes,
@@ -967,3 +997,281 @@ async def get_habits(
     )
     await cache_set(cache_key, response.model_dump(), ttl=600)
     return response
+
+
+@router.post("/generate-nudges")
+async def generate_nudges(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate smart study nudge notifications once per day."""
+    today = date.today()
+    now = datetime.now(timezone.utc)
+    cache_key = f"nudges:{current_user.id}:{today.isoformat()}"
+
+    # Dedup via cache
+    cached = await cache_get(cache_key)
+    if cached:
+        return {"status": "already_generated"}
+
+    # Fallback dedup if no Redis: check if we already created a study nudge today
+    today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    existing = await db.execute(
+        select(sa_func.count(Notification.id)).where(
+            Notification.user_id == current_user.id,
+            Notification.type == "study_nudge",
+            Notification.created_at >= today_start,
+        )
+    )
+    if (existing.scalar() or 0) > 0:
+        await cache_set(cache_key, {"done": True}, ttl=86400)
+        return {"status": "already_generated"}
+
+    import json
+    prefs = json.loads(current_user.nudge_preferences or "{}")
+
+    nudges_created = 0
+
+    # 1. Cards due today
+    if prefs.get("cards_due", True):
+        due_count_result = await db.execute(
+            select(sa_func.count(Flashcard.id)).where(
+                Flashcard.user_id == current_user.id,
+                Flashcard.next_review <= now,
+            )
+        )
+        due_today = due_count_result.scalar() or 0
+
+        if due_today >= 5:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"You have {due_today} flashcards due for review",
+                link="/flashcards/study",
+            )
+            nudges_created += 1
+
+    # 2. Severely overdue (2+ days)
+    if prefs.get("severely_overdue", True):
+        two_days_ago = now - timedelta(days=2)
+        overdue_result = await db.execute(
+            select(sa_func.count(Flashcard.id)).where(
+                Flashcard.user_id == current_user.id,
+                Flashcard.next_review <= two_days_ago,
+            )
+        )
+        overdue_count = overdue_result.scalar() or 0
+
+        if overdue_count >= 3:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"{overdue_count} flashcards are 2+ days overdue",
+                link="/flashcards/study",
+            )
+            nudges_created += 1
+
+    # 3. Study plan items today
+    if prefs.get("study_plan", True):
+        try:
+            from app.studyplan.models import StudyPlanItem, StudyPlan
+
+            plan_result = await db.execute(
+                select(StudyPlanItem.topic)
+                .join(StudyPlan, StudyPlanItem.plan_id == StudyPlan.id)
+                .where(
+                    StudyPlan.user_id == current_user.id,
+                    StudyPlan.status == "active",
+                    StudyPlanItem.date == today,
+                    StudyPlanItem.completed == False,
+                )
+                .limit(1)
+            )
+            plan_topic = plan_result.scalar()
+            if plan_topic:
+                create_notification(
+                    db, current_user.id, "study_nudge",
+                    title=f"Study plan: {plan_topic}",
+                    link="/studyplan",
+                )
+                nudges_created += 1
+        except Exception:
+            pass
+
+    # 4. Streak at risk
+    streak_result = await db.execute(
+        select(sa_func.date(StudySession.started_at))
+        .distinct()
+        .where(
+            StudySession.user_id == current_user.id,
+            StudySession.session_type == "focus",
+            StudySession.completed == True,
+        )
+        .order_by(sa_func.date(StudySession.started_at).desc())
+    )
+    dates = [row[0] for row in streak_result.all()]
+
+    streak = 0
+    check_date = today
+    for d in dates:
+        if isinstance(d, str):
+            d = date.fromisoformat(d)
+        if d == check_date:
+            streak += 1
+            check_date -= timedelta(days=1)
+        elif d < check_date:
+            break
+
+    studied_today = any(
+        (d if isinstance(d, date) else date.fromisoformat(d)) == today
+        for d in dates
+    ) if dates else False
+
+    if prefs.get("streak_risk", True):
+        if streak > 0 and not studied_today:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"Your {streak}-day streak is at risk!",
+                body="Complete a focus session today to keep it going.",
+                link="/pomodoro",
+            )
+            nudges_created += 1
+
+    # 5. Streak celebration
+    if prefs.get("streak_celebration", True):
+        if streak >= 7:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"Amazing {streak}-day streak!",
+                body="You're building a powerful study habit.",
+                link="/dashboard",
+            )
+            nudges_created += 1
+
+    # 6. Stale notes
+    if prefs.get("stale_notes", True):
+        stale_cutoff = now - timedelta(days=14)
+        stale_result = await db.execute(
+            select(sa_func.count(Document.id)).where(
+                Document.user_id == current_user.id,
+                Document.deleted == False,
+                Document.updated_at < stale_cutoff,
+            )
+        )
+        stale_count = stale_result.scalar() or 0
+
+        if stale_count > 0:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"You have {stale_count} notes untouched for 2+ weeks",
+                link="/notes",
+            )
+            nudges_created += 1
+
+    # 7. Topic-specific overdue
+    if prefs.get("topic_overdue", True):
+        three_days_ago = now - timedelta(days=3)
+        topic_overdue_result = await db.execute(
+            select(
+                Flashcard.note_id,
+                Document.title,
+                sa_func.count(Flashcard.id).label("cnt"),
+            )
+            .join(Document, Flashcard.note_id == Document.id)
+            .where(
+                Flashcard.user_id == current_user.id,
+                Flashcard.next_review <= three_days_ago,
+                Flashcard.note_id.isnot(None),
+            )
+            .group_by(Flashcard.note_id, Document.title)
+            .having(sa_func.count(Flashcard.id) >= 3)
+            .limit(3)
+        )
+        for row in topic_overdue_result.all():
+            days_overdue = (now - three_days_ago).days
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"Your {row.title} flashcards haven't been reviewed in {days_overdue} days — {row.cnt} overdue",
+                link="/flashcards/study",
+            )
+            nudges_created += 1
+
+    # 8. Quiz regression
+    if prefs.get("quiz_regression", True):
+        quiz_result = await db.execute(
+            select(Quiz.id, Quiz.title).where(Quiz.user_id == current_user.id)
+        )
+        for quiz_row in quiz_result.all():
+            attempts_result = await db.execute(
+                select(QuizAttempt.score, QuizAttempt.total_questions)
+                .where(
+                    QuizAttempt.quiz_id == quiz_row.id,
+                    QuizAttempt.user_id == current_user.id,
+                    QuizAttempt.total_questions > 0,
+                )
+                .order_by(QuizAttempt.completed_at.desc())
+                .limit(2)
+            )
+            attempts = attempts_result.all()
+            if len(attempts) >= 2:
+                latest_pct = round(attempts[0].score * 100 / attempts[0].total_questions)
+                prev_pct = round(attempts[1].score * 100 / attempts[1].total_questions)
+                if prev_pct - latest_pct > 15:
+                    create_notification(
+                        db, current_user.id, "study_nudge",
+                        title=f"Your {quiz_row.title} score dropped from {prev_pct}% to {latest_pct}%",
+                        link=f"/quizzes/{quiz_row.id}",
+                    )
+                    nudges_created += 1
+
+    # 9. Draft notes
+    if prefs.get("draft_notes", True):
+        from app.notes.models import NoteAnalysis
+        three_days_ago_dt = now - timedelta(days=3)
+        draft_result = await db.execute(
+            select(Document.id, Document.title, Document.created_at)
+            .outerjoin(NoteAnalysis, NoteAnalysis.document_id == Document.id)
+            .where(
+                Document.user_id == current_user.id,
+                Document.deleted == False,
+                sa_func.length(Document.content) < 200,
+                NoteAnalysis.id.is_(None),
+                Document.created_at < three_days_ago_dt,
+            )
+            .limit(5)
+        )
+        for row in draft_result.all():
+            days_old = (now - row.created_at.replace(tzinfo=timezone.utc)).days if row.created_at.tzinfo is None else (now - row.created_at).days
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"'{row.title}' looks unfinished — still a draft after {days_old} days",
+                link=f"/notes/{row.id}",
+            )
+            nudges_created += 1
+
+    # 10. Notes due for spaced repetition review
+    if prefs.get("notes_due_review", True):
+        note_review_result = await db.execute(
+            select(sa_func.count(ReviewSchedule.id)).where(
+                ReviewSchedule.user_id == current_user.id,
+                ReviewSchedule.next_review <= now,
+            )
+        )
+        note_review_count = note_review_result.scalar() or 0
+        if note_review_count >= 3:
+            create_notification(
+                db, current_user.id, "study_nudge",
+                title=f"You have {note_review_count} notes due for review",
+                link="/reviews",
+            )
+            nudges_created += 1
+
+    if nudges_created > 0:
+        await db.commit()
+
+    try:
+        from app.integrations.webhook import fire_webhooks_for_user
+        await fire_webhooks_for_user(user_id=current_user.id, event="study_nudge", data={"count": nudges_created}, db=db)
+    except Exception:
+        pass
+
+    await cache_set(cache_key, {"done": True}, ttl=86400)
+    return {"status": "generated", "count": nudges_created}

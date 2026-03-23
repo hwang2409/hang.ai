@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download, Share2, Link2, Link2Off } from 'lucide-react'
+import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download, Share2, Link2, Link2Off, Copy, HelpCircle, Zap, Play, Scissors } from 'lucide-react'
 import { api } from '../lib/api'
 import { getCached, setCache, updateCacheMessages } from '../lib/noteThreadCache'
 import { useChat } from '../hooks/useChat'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useFocus } from '../contexts/FocusContext'
 import Layout from '../components/Layout'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import SelectionToolbar from '../components/SelectionToolbar'
@@ -196,7 +197,7 @@ function FloatingToolbar({ title, onTitleChange, tags, canvasTagsOpen, onToggleT
 }
 
 /** Frosted-glass chat panel wrapper for canvas/moodboard modes */
-function FrostedChatPanel({ chatWidth, dark, messages, streaming, chatInput, setChatInput, onSendMessage, onChatKeyDown, content, onClose, style }) {
+function FrostedChatPanel({ chatWidth, dark, messages, streaming, chatInput, setChatInput, onSendMessage, onChatKeyDown, content, onClose, style, user }) {
   return (
     <div
       className="flex-shrink-0 h-full flex flex-col"
@@ -237,6 +238,7 @@ function FrostedChatPanel({ chatWidth, dark, messages, streaming, chatInput, set
         onCancelEditAnnotation={() => {}}
         onDeleteAnnotation={() => {}}
         onClose={onClose}
+        user={user}
       />
     </div>
   )
@@ -288,11 +290,114 @@ function ShareMenu({ shareToken, shareMenuOpen, shareCopied, onShare, onUnshare,
   )
 }
 
+/** Inline study context bar — shows connected study materials + quick actions */
+function StudyContextBar({ noteId, noteTitle, studyContext, readiness, dark, onGenerateCards, onGenerateQuiz, onStartFocus }) {
+  if (!studyContext) return null
+  const { totalCards, dueCards, quizCount } = studyContext
+
+  return (
+    <div className="flex items-center gap-4 px-2 py-1.5 rounded-lg mb-3 flex-shrink-0"
+      style={{
+        background: dark ? '#0e0e0e' : '#f5f3ee',
+        border: `1px solid ${dark ? '#151515' : '#e8e5de'}`,
+      }}>
+      {/* Stats */}
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        {totalCards > 0 && (
+          <span className="flex items-center gap-1.5 text-[11px]"
+            style={{ color: dueCards > 0 ? (dark ? '#c4a759' : '#8b7a3d') : (dark ? '#404040' : '#aaaaaa') }}>
+            <Layers size={12} />
+            {dueCards > 0 ? `${dueCards} cards due` : `${totalCards} cards`}
+          </span>
+        )}
+        {quizCount > 0 && (
+          <span className="flex items-center gap-1.5 text-[11px]"
+            style={{ color: dark ? '#404040' : '#aaaaaa' }}>
+            <HelpCircle size={12} />
+            {quizCount} quiz{quizCount !== 1 ? 'zes' : ''}
+          </span>
+        )}
+        {readiness && readiness.total > 0 && (
+          <span className="flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded"
+            style={{
+              color: readiness.coverage_pct >= 80 ? '#4ade80' : readiness.coverage_pct >= 50 ? (dark ? '#c4a759' : '#8b7a3d') : '#ef4444',
+              background: readiness.coverage_pct >= 80 ? 'rgba(74,222,128,0.08)' : readiness.coverage_pct >= 50 ? 'rgba(196,167,89,0.08)' : 'rgba(239,68,68,0.08)',
+            }}>
+            <BookOpen size={12} />
+            {readiness.known}/{readiness.total} prereqs
+          </span>
+        )}
+        {totalCards === 0 && quizCount === 0 && (!readiness || readiness.total === 0) && (
+          <span className="text-[11px]" style={{ color: dark ? '#2a2a2a' : '#cccccc' }}>
+            No study materials yet
+          </span>
+        )}
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button onClick={onGenerateCards}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
+          style={{
+            color: dark ? '#808080' : '#888888',
+            background: 'transparent',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.06)' : 'rgba(160,130,40,0.04)'
+            e.currentTarget.style.color = dark ? '#c4a759' : '#8b7a3d'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = dark ? '#808080' : '#888888'
+          }}>
+          <Zap size={11} />
+          Cards
+        </button>
+        <button onClick={onGenerateQuiz}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
+          style={{
+            color: dark ? '#808080' : '#888888',
+            background: 'transparent',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.06)' : 'rgba(160,130,40,0.04)'
+            e.currentTarget.style.color = dark ? '#c4a759' : '#8b7a3d'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = dark ? '#808080' : '#888888'
+          }}>
+          <HelpCircle size={11} />
+          Quiz
+        </button>
+        <button onClick={onStartFocus}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
+          style={{
+            color: dark ? '#808080' : '#888888',
+            background: 'transparent',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.06)' : 'rgba(160,130,40,0.04)'
+            e.currentTarget.style.color = dark ? '#c4a759' : '#8b7a3d'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = dark ? '#808080' : '#888888'
+          }}>
+          <Play size={11} />
+          Focus
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function NoteEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { dark } = useTheme()
   const { user } = useAuth()
+  const { startFocus } = useFocus()
   const userVimAllowed = user?.vim_enabled ?? false
   const FONT_SIZE_MAP = { small: '13px', normal: '14px', large: '16px', 'extra-large': '18px' }
   const editorFontSize = FONT_SIZE_MAP[user?.editor_font_size] || '14px'
@@ -339,8 +444,19 @@ export default function NoteEdit() {
   // Wiki links: all note titles for resolution + autocomplete
   const [noteTitles, setNoteTitles] = useState([])
 
+  // Access info for shared notes
+  const [accessInfo, setAccessInfo] = useState(null)
+  const [editSuggestions, setEditSuggestions] = useState([])
+  const [suggestedContent, setSuggestedContent] = useState(null)
+
   // Insights state (grouped)
   const [insightsState, setInsightsState] = useState({ data: null, loading: false })
+
+  // Study context state
+  const [studyContext, setStudyContext] = useState(null)
+
+  // Readiness state
+  const [readiness, setReadiness] = useState(null)
 
   // Canvas toolbar auto-hide
   const [toolbarVisible, setToolbarVisible] = useState(true)
@@ -358,6 +474,12 @@ export default function NoteEdit() {
     () => new Map(noteTitles.map(n => [n.title?.toLowerCase(), n.id])),
     [noteTitles]
   )
+
+  // Permission helpers
+  const isOwner = accessInfo?.is_owner ?? true
+  const canEdit = isOwner || accessInfo?.permission === 'edit'
+  const canSuggest = !isOwner && accessInfo?.permission === 'suggest'
+  const isViewOnly = !isOwner && accessInfo?.permission === 'view'
 
   // Auto-save (with wiki link sync)
   const saveNote = useCallback(async (newTitle, newContent, newTags) => {
@@ -518,6 +640,12 @@ export default function NoteEdit() {
         setShareState(prev => ({ ...prev, token: data.share_token || null }))
         setTags((data.tags || []).map(t => typeof t === 'string' ? t : t.name))
         try {
+          const access = await api.get(`/notes/${id}/access`)
+          setAccessInfo(access)
+        } catch {
+          setAccessInfo(null)
+        }
+        try {
           const anns = await api.get(`/annotations?document_id=${id}`)
           setAnnotations(anns)
         } catch (err) {
@@ -585,6 +713,21 @@ export default function NoteEdit() {
     }
     fetchThread()
   }, [noteId, loadThread])
+
+  // Fetch study context when note loads
+  useEffect(() => {
+    if (!id) return
+    Promise.all([
+      api.get(`/flashcards?note_id=${id}`).catch(() => []),
+      api.get('/quizzes').catch(() => []),
+    ]).then(([flashcards, quizzes]) => {
+      const cards = Array.isArray(flashcards) ? flashcards : []
+      const dueCards = cards.filter(c => !c.next_review || new Date(c.next_review) <= new Date())
+      const quizList = (Array.isArray(quizzes) ? quizzes : []).filter(q => q.note_id === parseInt(id))
+      setStudyContext({ totalCards: cards.length, dueCards: dueCards.length, quizCount: quizList.length })
+    })
+    api.get(`/knowledge/readiness/${id}`).then(setReadiness).catch(() => {})
+  }, [id])
 
   // Persist vim preference
   useEffect(() => { localStorage.setItem('vim-mode', vimEnabled ? 'true' : 'false') }, [vimEnabled])
@@ -737,6 +880,74 @@ export default function NoteEdit() {
     setTimeout(() => setShareState(prev => ({ ...prev, copied: false })), 2000)
   }
 
+  const handleCopyNote = async () => {
+    try {
+      const copied = await api.post(`/notes/${id}/copy`)
+      navigate(`/notes/${copied.id}`)
+    } catch (err) {
+      console.error('Copy failed:', err)
+    }
+  }
+
+  const handleSubmitSuggestion = async () => {
+    if (!suggestedContent) return
+    try {
+      await api.post(`/notes/${id}/edit-suggestions`, {
+        suggested_content: suggestedContent,
+      })
+      setSuggestedContent(null)
+    } catch (err) {
+      console.error('Submit suggestion failed:', err)
+    }
+  }
+
+  const loadEditSuggestions = useCallback(async () => {
+    try {
+      const sug = await api.get(`/notes/${id}/edit-suggestions`)
+      setEditSuggestions(sug.filter(s => s.status === 'pending'))
+    } catch {
+      setEditSuggestions([])
+    }
+  }, [id])
+
+  const handleAcceptSuggestion = async (sugId) => {
+    try {
+      await api.post(`/notes/${id}/edit-suggestions/${sugId}/accept`)
+      const data = await api.get(`/notes/${id}`)
+      setContent(data.content || '')
+      setTitle(data.title || '')
+      loadEditSuggestions()
+    } catch (err) {
+      console.error('Accept suggestion failed:', err)
+    }
+  }
+
+  const handleRejectSuggestion = async (sugId) => {
+    try {
+      await api.post(`/notes/${id}/edit-suggestions/${sugId}/reject`)
+      loadEditSuggestions()
+    } catch (err) {
+      console.error('Reject suggestion failed:', err)
+    }
+  }
+
+  // Load suggestions for owners
+  useEffect(() => {
+    if (isOwner && accessInfo) loadEditSuggestions()
+  }, [isOwner, accessInfo, loadEditSuggestions])
+
+  // Force read mode for view-only
+  useEffect(() => {
+    if (isViewOnly) setMode('read')
+  }, [isViewOnly])
+
+  // Init suggested content for suggest mode
+  useEffect(() => {
+    if (canSuggest && suggestedContent === null && content) {
+      setSuggestedContent(content)
+    }
+  }, [canSuggest, suggestedContent, content])
+
   const handleChatKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
   }
@@ -805,8 +1016,19 @@ export default function NoteEdit() {
           console.error('Failed to generate flashcards:', err)
         }
         break
+      case 'extract':
+        try {
+          const extracted = await api.post(`/notes/${noteId}/extract`, { content: text, replace_with_link: true })
+          const linkText = `[See: ${extracted.title}](/notes/${extracted.id})`
+          const newContent = content.replace(text, linkText)
+          setContent(newContent)
+          debouncedSave(title, newContent, tags)
+        } catch (err) {
+          console.error('Failed to extract note:', err)
+        }
+        break
     }
-  }, [selectionToolbar, noteId, content])
+  }, [selectionToolbar, noteId, content, title, tags, debouncedSave])
 
   // Annotation CRUD
   const handleSaveAnnotation = useCallback(async (annotationContent) => {
@@ -913,6 +1135,7 @@ export default function NoteEdit() {
     onChatKeyDown: handleChatKeyDown,
     content,
     onClose: () => setChatOpen(false),
+    user,
   }
 
   if (loading) {
@@ -1017,13 +1240,16 @@ export default function NoteEdit() {
             <ArrowLeft size={20} />
           </button>
           <div className="flex-1" />
-          <SaveStatusIndicator saveStatus={saveStatus} />
-          {userVimAllowed && vimEnabled && mode === 'write' && (
+          {canEdit && <SaveStatusIndicator saveStatus={saveStatus} />}
+          {canSuggest && suggestedContent !== content && (
+            <span className="text-[10px] text-[#c4a759] px-2 py-0.5 rounded bg-[#191919] border border-[#2a2211]">suggesting</span>
+          )}
+          {userVimAllowed && vimEnabled && mode === 'write' && canEdit && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#191919] border border-[#1c1c1c] text-[#808080] tracking-wider select-none">
               {vimMode}
             </span>
           )}
-          {userVimAllowed && (
+          {userVimAllowed && canEdit && (
             <button
               onClick={() => setVimEnabled(v => !v)}
               className={`group flex items-center gap-2 px-2.5 py-1 rounded-md text-xs transition-colors border ${
@@ -1037,14 +1263,25 @@ export default function NoteEdit() {
               <span className="text-[#333333] transition-colors group-hover:text-[#505050]">⌘J</span>
             </button>
           )}
-          <button
-            onClick={() => setMode(m => m === 'write' ? 'read' : 'write')}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-md text-xs transition-colors text-[#606060] hover:text-[#d4d4d4] bg-[#111111] border border-[#1c1c1c] hover:border-[#2a2a2a]"
-          >
-            <span>{mode === 'write' ? 'writing' : 'reading'}</span>
-            <span className="text-[#333333]">⌘E</span>
-          </button>
-          {!isCanvas && !isMoodboard && (
+          {(canEdit || canSuggest) && (
+            <button
+              onClick={() => setMode(m => m === 'write' ? 'read' : 'write')}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-md text-xs transition-colors text-[#606060] hover:text-[#d4d4d4] bg-[#111111] border border-[#1c1c1c] hover:border-[#2a2a2a]"
+            >
+              <span>{mode === 'write' ? (canSuggest ? 'suggesting' : 'writing') : 'reading'}</span>
+              <span className="text-[#333333]">⌘E</span>
+            </button>
+          )}
+          {!isOwner && (
+            <button
+              onClick={handleCopyNote}
+              className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
+              title="Copy to my notes"
+            >
+              <Copy size={18} />
+            </button>
+          )}
+          {!isCanvas && !isMoodboard && isOwner && (
             <button
               onClick={() => api.download(`/notes/${id}/export/pdf`)}
               className="p-2 rounded-md transition-colors text-[#333333] hover:text-[#606060]"
@@ -1053,16 +1290,18 @@ export default function NoteEdit() {
               <Download size={18} />
             </button>
           )}
-          <ShareMenu
-            shareToken={shareState.token}
-            shareMenuOpen={shareState.menuOpen}
-            shareCopied={shareState.copied}
-            onShare={handleShare}
-            onUnshare={handleUnshare}
-            onCopyShareLink={handleCopyShareLink}
-            onToggleMenu={() => setShareState(prev => ({ ...prev, menuOpen: !prev.menuOpen }))}
-            onCloseMenu={() => setShareState(prev => ({ ...prev, menuOpen: false }))}
-          />
+          {isOwner && (
+            <ShareMenu
+              shareToken={shareState.token}
+              shareMenuOpen={shareState.menuOpen}
+              shareCopied={shareState.copied}
+              onShare={handleShare}
+              onUnshare={handleUnshare}
+              onCopyShareLink={handleCopyShareLink}
+              onToggleMenu={() => setShareState(prev => ({ ...prev, menuOpen: !prev.menuOpen }))}
+              onCloseMenu={() => setShareState(prev => ({ ...prev, menuOpen: false }))}
+            />
+          )}
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className={`p-2 rounded-md transition-colors ${chatOpen ? 'bg-[#191919] text-[#d4d4d4]' : 'text-[#333333] hover:text-[#606060]'}`}
@@ -1076,14 +1315,45 @@ export default function NoteEdit() {
         <input
           type="text"
           value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          onFocus={() => setMode('write')}
+          onChange={(e) => canEdit ? handleTitleChange(e.target.value) : null}
+          onFocus={() => canEdit && setMode('write')}
+          readOnly={!canEdit}
           placeholder="untitled"
           className="text-2xl font-light bg-transparent border-none outline-none text-[#d4d4d4] placeholder-[#333333] mb-2 flex-shrink-0 w-full tracking-tight"
         />
 
+        {/* Suggest mode submit bar */}
+        {canSuggest && suggestedContent !== null && suggestedContent !== content && (
+          <div className="flex items-center gap-3 mb-2 flex-shrink-0">
+            <span className="text-[10px] text-[#c4a759]">unsaved suggestions</span>
+            <button
+              onClick={() => setSuggestedContent(content)}
+              className="text-[10px] text-[#505050] hover:text-[#808080] transition-colors"
+            >
+              discard
+            </button>
+            <button
+              onClick={handleSubmitSuggestion}
+              className="text-[10px] text-[#c4a759] hover:text-[#e0c96a] transition-colors"
+            >
+              submit
+            </button>
+          </div>
+        )}
+
         {/* Tags */}
         <div className="flex items-center gap-2 mb-4 flex-shrink-0 flex-wrap">
+          {!isOwner && accessInfo && (
+            <>
+              <span className="text-[10px] text-[#505050]">
+                by {accessInfo.author_username} · <span className={
+                  accessInfo.permission === 'edit' ? 'text-[#6a9a6a]' :
+                  accessInfo.permission === 'suggest' ? 'text-[#c4a759]' : 'text-[#505050]'
+                }>{accessInfo.permission}</span> · <span onClick={handleCopyNote} className="cursor-pointer hover:text-[#808080] transition-colors">copy</span>
+              </span>
+              <span className="text-[10px] text-[#333333]">|</span>
+            </>
+          )}
           {tags.map((tag, i) => (
             <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-[#191919] text-[#606060]">
               {tag}
@@ -1103,12 +1373,46 @@ export default function NoteEdit() {
           />
         </div>
 
+        {/* Study context bar */}
+        <StudyContextBar
+          noteId={id}
+          noteTitle={note?.title}
+          studyContext={studyContext}
+          readiness={readiness}
+          dark={dark}
+          onGenerateCards={async () => {
+            try {
+              await api.post('/flashcards/generate', { note_id: parseInt(id), count: 10 })
+              // Refresh study context
+              const cards = await api.get(`/flashcards?note_id=${id}`).catch(() => [])
+              const arr = Array.isArray(cards) ? cards : []
+              setStudyContext(prev => prev ? { ...prev, totalCards: arr.length, dueCards: arr.filter(c => !c.next_review || new Date(c.next_review) <= new Date()).length } : prev)
+            } catch {}
+          }}
+          onGenerateQuiz={async () => {
+            try {
+              const quiz = await api.post('/quizzes/generate', { note_id: parseInt(id), count: 5, question_types: ['multiple_choice', 'true_false'] })
+              if (quiz?.id) navigate(`/quizzes/take/${quiz.id}`)
+            } catch {}
+          }}
+          onStartFocus={() => startFocus({ noteId: parseInt(id), noteTitle: note?.title || 'Untitled' })}
+        />
+
         {/* Main content area */}
         <div className="flex flex-1 min-h-0 gap-0">
           {/* Editor / Reader */}
           <div className="flex-1 min-h-0 min-w-0">
-            {mode === 'write' ? (
-              vimEnabled ? (
+            {mode === 'write' && (canEdit || canSuggest) ? (
+              canSuggest ? (
+                <textarea
+                  ref={editorRef}
+                  value={suggestedContent ?? content}
+                  onChange={(e) => setSuggestedContent(e.target.value)}
+                  placeholder="suggest changes..."
+                  className="bg-[#111111] border border-[#2a2211] rounded-lg w-full h-full p-4 text-sm text-[#d4d4d4] placeholder-[#333333] resize-none outline-none focus:border-[#c4a759] transition-colors"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: editorFontSize }}
+                />
+              ) : vimEnabled ? (
                 <Suspense fallback={
                   <textarea
                     value={content}
@@ -1197,6 +1501,11 @@ export default function NoteEdit() {
                 onAddInsightTag={handleAddInsightTag}
                 onCreateFlashcard={handleCreateFlashcard}
                 onClose={() => setChatOpen(false)}
+                editSuggestions={editSuggestions}
+                onAcceptSuggestion={handleAcceptSuggestion}
+                onRejectSuggestion={handleRejectSuggestion}
+                isOwner={isOwner}
+                user={user}
               />
             </div>
           )}
@@ -1225,6 +1534,8 @@ export default function NoteEdit() {
             { separator: true },
             { id: 'summarize', icon: FileText, label: 'summarize', action: () => handleSelectionAction('summarize') },
             { id: 'define', icon: BookOpen, label: 'define', action: () => handleSelectionAction('define') },
+            { separator: true },
+            { id: 'extract', icon: Scissors, label: 'extract to note', action: () => handleSelectionAction('extract') },
           ]}
         />
       )}

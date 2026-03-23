@@ -7,16 +7,18 @@ import zipfile
 from typing import Optional
 
 import yaml
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crypto import decrypt_api_key
 from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.notes.models import Document, Folder, Tag, document_tags
 from app.imports.extractors import extract_pdf_text, extract_pptx_text, extract_youtube_transcript
 from app.imports.converter import convert_to_notes
 from app.rate_limit import limiter
+from app.automations.engine import fire_event
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +116,7 @@ async def import_youtube(
 async def convert(
     request: Request,
     body: ConvertRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -122,7 +125,13 @@ async def convert(
         raise HTTPException(400, "No text to convert")
 
     try:
-        result = convert_to_notes(body.text, body.source_name)
+        api_key = None
+        if current_user.encrypted_anthropic_key:
+            try:
+                api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+            except Exception:
+                pass
+        result = convert_to_notes(body.text, body.source_name, anthropic_api_key=api_key)
     except Exception as e:
         logger.exception("Conversion failed")
         raise HTTPException(500, f"AI conversion failed: {e}")
@@ -154,6 +163,10 @@ async def convert(
         created_notes.append({"id": doc.id, "title": title})
 
     await db.commit()
+
+    background_tasks.add_task(fire_event, current_user.id, "import_completed", {
+        "note_ids": [n["id"] for n in created_notes], "folder_name": folder_name, "count": len(created_notes),
+    })
 
     return ConvertResponse(
         folder_id=folder_id,

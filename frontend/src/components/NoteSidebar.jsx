@@ -5,9 +5,9 @@ import { api } from '../lib/api'
 import MarkdownRenderer from './MarkdownRenderer'
 
 const AiAvatar = ({ size = 10 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <circle cx="12" cy="12" r="3" fill="#505050" />
-    <path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#333333" strokeWidth="2" strokeLinecap="round" />
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="text-[#505050]">
+    <circle cx="12" cy="12" r="3" fill="currentColor" />
+    <path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
   </svg>
 )
 
@@ -316,6 +316,13 @@ export default function NoteSidebar({
   // Link metadata
   linkMeta = null,
   sourceUrl = null,
+  // Edit suggestions (owner review)
+  editSuggestions = [],
+  onAcceptSuggestion,
+  onRejectSuggestion,
+  isOwner = true,
+  // User context
+  user = null,
 }) {
   const chatScrollRef = useRef(null)
   const chatEndRef = useRef(null)
@@ -327,6 +334,38 @@ export default function NoteSidebar({
   // Outline state
   const [outline, setOutline] = useState(null)
   const [outlineLoading, setOutlineLoading] = useState(false)
+
+  // Concept search state
+  const [conceptNotes, setConceptNotes] = useState(null)
+  const [conceptLoading, setConceptLoading] = useState(false)
+  const [activeConcept, setActiveConcept] = useState(null)
+
+  // Readiness state
+  const [readiness, setReadiness] = useState(null)
+  useEffect(() => {
+    if (noteId && sidebarTab === 'insights') {
+      api.get(`/knowledge/readiness/${noteId}`).then(setReadiness).catch(() => {})
+    }
+  }, [noteId, sidebarTab])
+
+  const handleConceptClick = async (concept) => {
+    if (activeConcept === concept && conceptNotes) {
+      setActiveConcept(null)
+      setConceptNotes(null)
+      return
+    }
+    setActiveConcept(concept)
+    setConceptLoading(true)
+    try {
+      const data = await api.get(`/notes/by-concept?concept=${encodeURIComponent(concept)}`)
+      setConceptNotes(data)
+    } catch (err) {
+      console.error('Failed to fetch concept notes:', err)
+      setConceptNotes(null)
+    } finally {
+      setConceptLoading(false)
+    }
+  }
 
   const handleGenerateOutline = async () => {
     setOutlineLoading(true)
@@ -392,6 +431,11 @@ export default function NoteSidebar({
                 links
               </TabButton>
               <TabButton active={sidebarTab === 'insights'} onClick={() => setSidebarTab('insights')}>insights</TabButton>
+              {isOwner && editSuggestions.length > 0 && (
+                <TabButton active={sidebarTab === 'suggestions'} onClick={() => setSidebarTab('suggestions')} count={editSuggestions.length}>
+                  suggestions
+                </TabButton>
+              )}
             </>
           )}
         </div>
@@ -511,6 +555,11 @@ export default function NoteSidebar({
         </div>
       ) : sidebarTab === 'chat' ? (
         <>
+          {user?.contextual_ai && (
+            <div className="text-[10px] text-[#c4a759] opacity-40 text-center py-1">
+              ai is using your learning history
+            </div>
+          )}
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
               <EmptyState>
@@ -634,6 +683,51 @@ export default function NoteSidebar({
             </div>
           )}
         </div>
+      ) : sidebarTab === 'suggestions' ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {editSuggestions.length === 0 ? (
+            <EmptyState>no pending suggestions.</EmptyState>
+          ) : (
+            editSuggestions.map((s) => (
+              <div
+                key={s.id}
+                className="rounded-lg p-3 space-y-2"
+                style={{
+                  background: dark
+                    ? 'linear-gradient(135deg, rgba(196,167,89,0.03) 0%, rgba(17,17,17,1) 60%)'
+                    : 'linear-gradient(135deg, rgba(180,150,60,0.04) 0%, #ffffff 60%)',
+                  border: `1px solid ${dark ? '#1c1c1c' : '#ddd9d0'}`,
+                  borderLeft: `2px solid ${dark ? 'rgba(196,167,89,0.25)' : 'rgba(160,130,40,0.35)'}`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#d4d4d4] font-medium">{s.username}</span>
+                  <span className="text-[10px] text-[#606060]">
+                    {new Date(s.created_at.endsWith('Z') ? s.created_at : s.created_at + 'Z').toLocaleDateString()}
+                  </span>
+                </div>
+                {s.suggested_title && (
+                  <p className="text-[11px] text-[#c4a759]">Title: {s.suggested_title}</p>
+                )}
+                <p className="text-[11px] text-[#808080] line-clamp-4 whitespace-pre-wrap">{s.suggested_content}</p>
+                <div className="flex gap-2 justify-end pt-1">
+                  <button
+                    onClick={() => onRejectSuggestion?.(s.id)}
+                    className="text-[10px] text-[#606060] hover:text-[#ef4444] transition-colors px-2 py-0.5"
+                  >
+                    reject
+                  </button>
+                  <button
+                    onClick={() => onAcceptSuggestion?.(s.id)}
+                    className="text-[10px] text-[#d4d4d4] bg-[#191919] rounded px-2.5 py-0.5 hover:bg-[#222222] transition-colors"
+                  >
+                    accept
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       ) : (
         /* Insights tab */
         <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in">
@@ -689,11 +783,48 @@ export default function NoteSidebar({
                   <span className="text-[10px] uppercase tracking-wider text-[#444444] block mb-2">key concepts</span>
                   <div className="flex flex-wrap gap-1.5">
                     {insights.concepts.map((c, i) => (
-                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-[#191919] border border-[#1c1c1c] text-[#c4a759]">
+                      <button
+                        key={i}
+                        onClick={() => handleConceptClick(c)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                          activeConcept === c
+                            ? 'bg-[#c4a759] text-[#0a0a0a] border-[#c4a759]'
+                            : 'bg-[#191919] border-[#1c1c1c] text-[#c4a759] hover:bg-[#1e1e1e] hover:border-[#2a2a2a]'
+                        }`}
+                      >
                         {c}
-                      </span>
+                      </button>
                     ))}
                   </div>
+                  {conceptLoading && activeConcept && (
+                    <div className="mt-2 space-y-2">
+                      {[1, 0.7, 0.85].map((w, i) => (
+                        <div key={i} className="h-3 rounded bg-[#191919] animate-pulse" style={{ width: `${w * 100}%`, animationDelay: `${i * 0.08}s` }} />
+                      ))}
+                    </div>
+                  )}
+                  {!conceptLoading && conceptNotes && activeConcept && (
+                    <div className="mt-2 space-y-1.5">
+                      {conceptNotes.notes?.length === 0 && (
+                        <p className="text-[10px] text-[#505050]">no related notes found.</p>
+                      )}
+                      {conceptNotes.notes?.filter(n => n.id !== noteId).map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => navigate(`/notes/${n.id}`)}
+                          className="w-full text-left rounded-lg p-2.5 transition-colors"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(196,167,89,0.03) 0%, rgba(17,17,17,1) 60%)',
+                            border: '1px solid #1c1c1c',
+                            borderLeft: '2px solid rgba(196,167,89,0.25)',
+                          }}
+                        >
+                          <p className="text-xs text-[#d4d4d4] truncate font-medium">{n.title}</p>
+                          <p className="text-[10px] text-[#505050] truncate mt-1">{n.preview}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -778,6 +909,43 @@ export default function NoteSidebar({
                       <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-[#141414] border border-[#1c1c1c] text-[#808080]">
                         {p}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Prerequisite Readiness */}
+              {readiness && readiness.total > 0 && (
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-[#444444] block mb-2">readiness</span>
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-[#b0b0b0]">
+                        You know {readiness.known}/{readiness.total} prerequisites
+                      </span>
+                      <span className="text-[10px] text-[#606060]">{readiness.coverage_pct}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[#191919] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${readiness.coverage_pct}%`,
+                          background: readiness.coverage_pct >= 80 ? '#4ade80' : readiness.coverage_pct >= 50 ? '#c4a759' : '#ef4444',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {readiness.prerequisites.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[11px]">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.known ? 'bg-[#4ade80]' : 'bg-[#c4a759]'}`} />
+                        <span className={p.known ? 'text-[#808080]' : 'text-[#c4a759]'}>
+                          {p.concept}
+                        </span>
+                        {p.known && p.mastery_pct != null && (
+                          <span className="text-[9px] text-[#444444] ml-auto">{p.mastery_pct}%</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

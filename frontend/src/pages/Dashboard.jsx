@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap, Lightbulb, TrendingUp, Timer, BarChart3 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap, Lightbulb, TrendingUp, Timer, BarChart3, Play, HelpCircle, Square, X, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
+import PomodoroInsightsWidget from '../components/plugins/PomodoroInsightsWidget'
+import { usePlugins } from '../contexts/PluginContext'
 
 function formatMinutes(mins) {
   if (mins < 60) return `${mins}m`
@@ -23,8 +26,35 @@ function relativeTime(dateStr) {
   return `${days}d ago`
 }
 
+function QuickAction({ icon: Icon, label, sublabel, onClick, dark }) {
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-3 p-3 rounded-xl text-left transition-all group"
+      style={{
+        background: dark ? '#111111' : '#f5f3ee',
+        border: `1px solid ${dark ? '#1c1c1c' : '#ddd9d0'}`,
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = dark ? '#2a2a2a' : '#ccc8bf'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = dark ? '#1c1c1c' : '#ddd9d0'}>
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ background: dark ? 'rgba(196,167,89,0.06)' : 'rgba(160,130,40,0.04)' }}>
+        <Icon size={16} style={{ color: dark ? '#c4a759' : '#8b7a3d' }} />
+      </div>
+      <div>
+        <div className="text-[13px] font-medium" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>{label}</div>
+        <div className="text-[11px]" style={{ color: dark ? '#404040' : '#aaaaaa' }}>{sublabel}</div>
+      </div>
+    </button>
+  )
+}
+
+const PLUGIN_WIDGET_MAP = { pomodoro_insights: PomodoroInsightsWidget }
+
 export default function Dashboard() {
   const { dark } = useTheme()
+  const navigate = useNavigate()
+  const { togglePanel } = useWorkspace()
+  const pluginCtx = usePlugins()
   const [pomodoroStats, setPomodoroStats] = useState(null)
   const [sessions, setSessions] = useState([])
   const [flashcardStats, setFlashcardStats] = useState(null)
@@ -36,6 +66,32 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [mastery, setMastery] = useState(null)
   const [habits, setHabits] = useState(null)
+  const [nudges, setNudges] = useState([])
+  const [reviewStats, setReviewStats] = useState(null)
+  const [socialFeed, setSocialFeed] = useState([])
+  const [dismissedNudges, setDismissedNudges] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('neuronic_dismissed_nudges') || '[]') } catch { return [] }
+  })
+
+  const dueCount = flashcardStats?.due_today ?? 0
+
+  const startPomodoro = async () => {
+    try {
+      await api.post('/pomodoro', {
+        label: 'Focus session',
+        session_type: 'focus',
+        duration_minutes: 25,
+        planned_minutes: 25,
+        completed: false,
+      })
+      localStorage.setItem('neuronic_active_pomodoro', JSON.stringify({
+        endTime: Date.now() + 25 * 60 * 1000,
+        duration: 25,
+        paused: false,
+      }))
+      window.dispatchEvent(new Event('storage'))
+    } catch {}
+  }
 
   useEffect(() => {
     api.get('/pomodoro/stats').then(setPomodoroStats).catch(() => {})
@@ -44,10 +100,17 @@ export default function Dashboard() {
     api.get('/notes').then(data => setNotes((data.documents || data).slice(0, 5))).catch(() => {})
     api.get('/todos?completed=false').then(setTodos).catch(() => {})
     api.get('/dashboard/review').then(setReview).catch(() => {})
+    api.get('/reviews/stats').then(setReviewStats).catch(() => {})
     api.get('/dashboard/trends?weeks=8').then(setTrends).catch(() => {})
     api.get('/pomodoro/analytics?weeks=12').then(setAnalytics).catch(() => {})
     api.get('/dashboard/mastery').then(setMastery).catch(() => {})
     api.get('/dashboard/habits').then(setHabits).catch(() => {})
+    api.post('/dashboard/generate-nudges').catch(() => {})
+    api.get('/social/feed?limit=5').then(data => setSocialFeed(data || [])).catch(() => {})
+    api.get('/notifications').then(data => {
+      const studyNudges = (data.notifications || []).filter(n => n.type === 'study_nudge' && !n.is_read)
+      setNudges(studyNudges)
+    }).catch(() => {})
   }, [])
 
   // Heatmap data: minutes per day for last 365 days
@@ -99,9 +162,50 @@ export default function Dashboard() {
     return items.slice(0, 8)
   }, [sessions, notes])
 
+  const dismissNudge = async (nudge) => {
+    const updated = [...dismissedNudges, nudge.id]
+    setDismissedNudges(updated)
+    sessionStorage.setItem('neuronic_dismissed_nudges', JSON.stringify(updated))
+    try { await api.post(`/notifications/${nudge.id}/read`) } catch {}
+  }
+
+  const visibleNudges = nudges.filter(n => !dismissedNudges.includes(n.id))
+
   const toggleTodo = async (todo) => {
     await api.put(`/todos/${todo.id}`, { completed: !todo.completed })
     api.get('/todos?completed=false').then(setTodos).catch(() => {})
+  }
+
+  const toggleBriefTodo = async (item) => {
+    // Extract todo id from the item link (e.g. /todos or /todos/123)
+    const match = item.link?.match(/\/todos\/(\d+)/)
+    if (match) {
+      try {
+        await api.put(`/todos/${match[1]}`, { completed: true })
+        // Refresh the daily brief and todos
+        api.get('/dashboard/review').then(setReview).catch(() => {})
+        api.get('/todos?completed=false').then(setTodos).catch(() => {})
+      } catch {}
+    }
+  }
+
+  const startBriefPomodoro = async (item) => {
+    try {
+      await api.post('/pomodoro', {
+        label: item.title || 'Study session',
+        session_type: 'focus',
+        duration_minutes: 25,
+        planned_minutes: 25,
+        completed: false,
+      })
+      localStorage.setItem('neuronic_active_pomodoro', JSON.stringify({
+        endTime: Date.now() + 25 * 60 * 1000,
+        duration: 25,
+        paused: false,
+      }))
+      window.dispatchEvent(new Event('storage'))
+      if (item.link) navigate(item.link)
+    } catch {}
   }
 
   // Build heatmap grid (52 weeks x 7 days)
@@ -170,6 +274,49 @@ export default function Dashboard() {
             dashboard
           </h1>
 
+          {/* Quick Start */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <QuickAction icon={Play} label="Focus session" sublabel="25 min pomodoro" onClick={startPomodoro} dark={dark} />
+            <QuickAction icon={Layers} label="Review cards" sublabel={`${dueCount} due`} onClick={() => navigate('/flashcards/study')} dark={dark} />
+            <QuickAction icon={HelpCircle} label="Take a quiz" sublabel="Test yourself" onClick={() => navigate('/quizzes')} dark={dark} />
+            <QuickAction icon={Brain} label="Feynman" sublabel="Explain to learn" onClick={() => navigate('/feynman')} dark={dark} />
+            {reviewStats?.due_review_count > 0 && (
+              <QuickAction icon={BookOpen} label="Review notes" sublabel={`${reviewStats.due_review_count} due`} onClick={() => navigate('/reviews')} dark={dark} />
+            )}
+          </div>
+
+          {/* Smart Nudges */}
+          {visibleNudges.length > 0 && (
+            <div className="space-y-2 mb-6">
+              {visibleNudges.map(nudge => (
+                <div
+                  key={nudge.id}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer group transition-colors"
+                  style={{
+                    background: dark ? 'rgba(196,167,89,0.06)' : 'rgba(196,167,89,0.04)',
+                    borderColor: dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.25)',
+                  }}
+                  onClick={() => nudge.link && navigate(nudge.link)}
+                >
+                  <Zap size={14} style={{ color: '#c4a759', flexShrink: 0 }} />
+                  <span className="text-xs flex-1 min-w-0 truncate text-text">{nudge.title}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); dismissNudge(nudge) }}
+                    className="flex-shrink-0 p-1 rounded-md transition-colors border-0 cursor-pointer"
+                    style={{
+                      background: 'transparent',
+                      color: dark ? '#555' : '#aaa',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = dark ? '#999' : '#666'}
+                    onMouseLeave={e => e.currentTarget.style.color = dark ? '#555' : '#aaa'}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Daily Brief */}
           {review && (() => {
             const items = review.brief_items || []
@@ -194,18 +341,73 @@ export default function Dashboard() {
             }
 
             const BriefRow = ({ item }) => (
-              <Link
-                to={item.link}
-                className="flex items-center gap-2.5 py-1.5 px-2 -mx-2 rounded-lg no-underline group transition-colors"
+              <div
+                className="flex items-center gap-2.5 py-1.5 px-2 -mx-2 rounded-lg group transition-colors"
                 style={item.priority === 1 ? { background: dark ? 'rgba(239,68,68,0.06)' : 'rgba(239,68,68,0.04)' } : {}}
               >
-                {briefIcon(item.type)}
-                <div className="flex-1 min-w-0">
+                {(item.type === 'overdue_todo' || item.type === 'upcoming_todo') ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleBriefTodo(item) }}
+                    className="flex-shrink-0 transition-colors"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                    title="Mark complete"
+                  >
+                    <Square size={12} style={{ color: item.type === 'overdue_todo' ? '#ef4444' : (dark ? '#555' : '#aaa') }} />
+                  </button>
+                ) : (
+                  briefIcon(item.type)
+                )}
+                <Link
+                  to={item.link}
+                  className="flex-1 min-w-0 no-underline"
+                >
                   <span className="text-xs block truncate text-text">{item.title}</span>
                   {item.subtitle && <span className="text-[10px] block truncate text-text-muted">{item.subtitle}</span>}
+                </Link>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {item.type === 'flashcard_review' && (
+                    <button onClick={(e) => { e.stopPropagation(); togglePanel('flashcards') }}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors border-0 cursor-pointer"
+                      style={{
+                        background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(160,130,40,0.06)',
+                        color: dark ? '#c4a759' : '#8b7a3d',
+                      }}>
+                      Review
+                    </button>
+                  )}
+                  {item.type === 'quiz_retake' && (
+                    <button onClick={(e) => { e.stopPropagation(); navigate(item.link) }}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors border-0 cursor-pointer"
+                      style={{
+                        background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(160,130,40,0.06)',
+                        color: dark ? '#c4a759' : '#8b7a3d',
+                      }}>
+                      Retake
+                    </button>
+                  )}
+                  {item.type === 'study_plan' && (
+                    <button onClick={(e) => { e.stopPropagation(); startBriefPomodoro(item) }}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors border-0 cursor-pointer"
+                      style={{
+                        background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(160,130,40,0.06)',
+                        color: dark ? '#c4a759' : '#8b7a3d',
+                      }}>
+                      Start
+                    </button>
+                  )}
+                  {item.type === 'feynman_retry' && (
+                    <button onClick={(e) => { e.stopPropagation(); navigate(item.link) }}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors border-0 cursor-pointer"
+                      style={{
+                        background: dark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)',
+                        color: dark ? '#f59e0b' : '#b45309',
+                      }}>
+                      Retry
+                    </button>
+                  )}
+                  <ChevronRight size={12} style={{ flexShrink: 0 }} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-                <ChevronRight size={12} style={{ flexShrink: 0 }} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-              </Link>
+              </div>
             )
 
             // Items for the task list (excluding the study_next item to avoid duplication)
@@ -744,6 +946,63 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Friend Activity */}
+          {socialFeed.length > 0 && (
+            <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] uppercase tracking-wider flex items-center gap-1.5 text-text-muted">
+                  <Users size={10} />
+                  friend activity
+                </p>
+                <Link to="/groups" className="text-[10px] no-underline" style={{ color: '#c4a759' }}>see all</Link>
+              </div>
+              <div className="space-y-1">
+                {socialFeed.map(e => {
+                  const detail = (() => { try { return JSON.parse(e.detail_json || '{}') } catch { return {} } })()
+                  let text = e.event_type
+                  switch (e.event_type) {
+                    case 'study_session':
+                      text = `studied for ${detail.duration_minutes || '?'}min`; break
+                    case 'flashcard_review':
+                      text = 'reviewed flashcards'; break
+                    case 'quiz_complete':
+                      text = `scored ${detail.score}/${detail.total} on ${detail.title || 'a quiz'}`; break
+                    case 'note_created':
+                      text = 'created a note'; break
+                    case 'note_shared':
+                      text = 'shared a note'; break
+                    default: break
+                  }
+                  return (
+                    <div key={e.id} className="flex items-center gap-3 py-1.5">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium flex-shrink-0"
+                        style={{
+                          background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.06)',
+                          color: dark ? '#c4a759' : '#8b7a3d',
+                          border: `1px solid ${dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.2)'}`,
+                        }}>
+                        {e.username?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="flex-1 min-w-0 truncate">
+                        <span className="text-xs font-medium text-text">{e.username}</span>
+                        <span className="text-xs text-text-secondary"> {text}</span>
+                      </div>
+                      <span className="text-[10px] flex-shrink-0 text-text-muted tabular-nums">
+                        {relativeTime(e.created_at)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Plugin widgets */}
+          {pluginCtx?.getDashboardWidgets().map(widgetId => {
+            const Widget = PLUGIN_WIDGET_MAP[widgetId]
+            return Widget ? <Widget key={widgetId} /> : null
+          })}
 
         </div>
       </div>

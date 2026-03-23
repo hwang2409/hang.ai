@@ -98,7 +98,10 @@ async def knowledge_graph(
     # Parse all embeddings once
     parsed: list[tuple[Document, list[float]]] = []
     for emb, doc in rows:
-        vec = json.loads(emb.embedding)
+        try:
+            vec = json.loads(emb.embedding)
+        except (json.JSONDecodeError, TypeError):
+            continue
         parsed.append((doc, vec))
 
     nodes = [

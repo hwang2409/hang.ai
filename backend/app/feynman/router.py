@@ -1,7 +1,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,16 +14,29 @@ from app.feynman.schemas import (
     SocraticStartRequest, SocraticReplyRequest,
     SocraticSessionResponse, SocraticSessionListResponse,
 )
+from app.crypto import decrypt_api_key
 from app.llm.service import evaluate_text
+from app.llm.context import get_learner_context, inject_learner_context
 from app.llm.response_parser import parse_llm_json
+from app.automations.engine import fire_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _get_anthropic_key(user) -> str | None:
+    if user.encrypted_anthropic_key:
+        try:
+            return decrypt_api_key(user.encrypted_anthropic_key)
+        except Exception:
+            return None
+    return None
+
+
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
     body: SessionCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -57,7 +70,11 @@ async def create_session(
         '- "feedback": string (constructive advice for improvement)'
     )
 
-    raw_response = await evaluate_text(prompt)
+    learner_ctx = await get_learner_context(db, current_user)
+    from app.llm.prompts import VOICE
+    feynman_system = inject_learner_context(VOICE, learner_ctx)
+
+    raw_response = await evaluate_text(prompt, system_prompt=feynman_system, api_key=_get_anthropic_key(current_user))
 
     try:
         evaluation = parse_llm_json(raw_response)
@@ -80,6 +97,11 @@ async def create_session(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+
+    background_tasks.add_task(fire_event, current_user.id, "feynman_completed", {
+        "score": session.score, "topic": session.topic, "note_id": session.note_id,
+    })
+
     return session
 
 
@@ -238,7 +260,10 @@ async def start_socratic_session(
         'Return ONLY a JSON object: {"type": "question", "content": "<your question>"}'
     )
 
-    raw = await evaluate_text(first_prompt, system_prompt=SOCRATIC_SYSTEM)
+    learner_ctx = await get_learner_context(db, current_user)
+    socratic_sys = inject_learner_context(SOCRATIC_SYSTEM, learner_ctx)
+
+    raw = await evaluate_text(first_prompt, system_prompt=socratic_sys, api_key=_get_anthropic_key(current_user))
     parsed = _parse_ai_response(raw)
     question_text = parsed.get("content", raw.strip())
 
@@ -282,7 +307,9 @@ async def reply_socratic(
 
     note_content = await _get_note_content(db, session.note_id, current_user.id)
     prompt = _build_socratic_prompt(session.topic, messages, note_content)
-    raw = await evaluate_text(prompt, system_prompt=SOCRATIC_SYSTEM)
+    learner_ctx = await get_learner_context(db, current_user)
+    socratic_sys = inject_learner_context(SOCRATIC_SYSTEM, learner_ctx)
+    raw = await evaluate_text(prompt, system_prompt=socratic_sys, api_key=_get_anthropic_key(current_user))
     parsed = _parse_ai_response(raw)
 
     if parsed.get("type") == "evaluation":
@@ -327,7 +354,8 @@ async def finish_socratic(
     messages = json.loads(session.messages)
     note_content = await _get_note_content(db, session.note_id, current_user.id)
     prompt = _build_socratic_prompt(session.topic, messages, note_content, force_evaluate=True)
-    raw = await evaluate_text(prompt, system_prompt=SOCRATIC_SYSTEM)
+    api_key = _get_anthropic_key(current_user)
+    raw = await evaluate_text(prompt, system_prompt=SOCRATIC_SYSTEM, api_key=api_key)
     parsed = _parse_ai_response(raw)
 
     # Force evaluation even if AI returned a question
@@ -336,6 +364,7 @@ async def finish_socratic(
         raw = await evaluate_text(
             prompt + "\n\nYou MUST evaluate now. Return the evaluation JSON.",
             system_prompt=SOCRATIC_SYSTEM,
+            api_key=api_key,
         )
         parsed = _parse_ai_response(raw)
 
@@ -432,7 +461,8 @@ async def generate_practice_problem(
         '- "answer": string (the final concise answer)\n'
     )
 
-    raw = await evaluate_text(prompt)
+    api_key = _get_anthropic_key(current_user)
+    raw = await evaluate_text(prompt, api_key=api_key)
     try:
         parsed = parse_llm_json(raw)
     except (json.JSONDecodeError, Exception):
@@ -474,7 +504,7 @@ async def check_practice_answer(
         '- "steps_missed": array of strings (any steps or concepts they missed)\n'
     )
 
-    raw = await evaluate_text(prompt)
+    raw = await evaluate_text(prompt, api_key=_get_anthropic_key(current_user))
     try:
         parsed = parse_llm_json(raw)
     except (json.JSONDecodeError, Exception):

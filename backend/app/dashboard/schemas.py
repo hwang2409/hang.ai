@@ -76,6 +76,7 @@ class BriefItem(BaseModel):
         "feynman_retry",
         "stale_note",
         "upcoming_todo",
+        "note_review",
     ]
     priority: Literal[1, 2, 3]
     title: str
@@ -129,6 +130,7 @@ class DashboardReview(BaseModel):
     current_streak: int = 0
     quiz_retakes: list[QuizBriefInfo] = []
     brief_items: list[BriefItem] = []
+    due_review_count: int = 0
     # Daily study brief
     greeting: str = ""
     study_next: Optional[BriefItem] = None

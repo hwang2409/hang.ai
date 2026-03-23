@@ -14,9 +14,37 @@ const NODE_PALETTE = [
   '#d4a060', // major hub — gold
 ]
 
+// Mastery palette for concept nodes — dark theme
+const MASTERY_PALETTE_DARK = [
+  { min: 0,  max: 20,  color: '#8b5a5a' }, // muted red — beginner
+  { min: 20, max: 40,  color: '#8b7a5a' }, // amber
+  { min: 40, max: 60,  color: '#7a8b5a' }, // olive
+  { min: 60, max: 80,  color: '#5a8b7a' }, // teal
+  { min: 80, max: 100, color: '#5a7a8b' }, // blue — mastered
+]
+
+// Mastery palette for concept nodes — light theme (slightly darker)
+const MASTERY_PALETTE_LIGHT = [
+  { min: 0,  max: 20,  color: '#7a4a4a' },
+  { min: 20, max: 40,  color: '#7a6a4a' },
+  { min: 40, max: 60,  color: '#6a7a4a' },
+  { min: 60, max: 80,  color: '#4a7a6a' },
+  { min: 80, max: 100, color: '#4a6a7a' },
+]
+
 function getNodeColor(degree) {
   const i = Math.min(Math.floor(degree / 2), NODE_PALETTE.length - 1)
   return NODE_PALETTE[i]
+}
+
+function getConceptColor(mastery_pct, isDark) {
+  const palette = isDark ? MASTERY_PALETTE_DARK : MASTERY_PALETTE_LIGHT
+  if (mastery_pct == null) return '#4a6670' // slate — no data
+  for (const band of palette) {
+    if (mastery_pct >= band.min && mastery_pct < band.max) return band.color
+  }
+  // 100% exactly falls in the last band
+  return palette[palette.length - 1].color
 }
 
 function truncate(str, max = 18) {
@@ -56,10 +84,20 @@ export default function KnowledgeGraph() {
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ x: 0, y: 0, vbx: 0, vby: 0 })
   const [settled, setSettled] = useState(false)
+  const [viewMode, setViewMode] = useState('notes') // 'notes' or 'concepts'
 
-  // Fetch graph data
-  useEffect(() => {
-    api.get('/search/knowledge-graph')
+  // Load data for the active view
+  const loadGraph = useCallback((mode) => {
+    setLoading(true)
+    setHoveredNode(null)
+    setSettled(false)
+    nodesRef.current = []
+    edgesRef.current = []
+    if (animRef.current) cancelAnimationFrame(animRef.current)
+    setViewBox({ x: -500, y: -400, w: 1000, h: 800 })
+
+    const endpoint = mode === 'concepts' ? '/knowledge/graph' : '/search/knowledge-graph'
+    api.get(endpoint)
       .then(data => {
         setGraphData(data)
         const nodes = data.nodes.map((n, i) => ({
@@ -76,8 +114,13 @@ export default function KnowledgeGraph() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch graph data on mount and when viewMode changes
+  useEffect(() => {
+    loadGraph(viewMode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [viewMode])
 
   // Force simulation
   const startSimulation = useCallback((nodes, edges) => {
@@ -244,12 +287,17 @@ export default function KnowledgeGraph() {
 
   const matchesSearch = useCallback((node) => {
     if (!searchQuery.trim()) return true
-    return (node.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const text = (node.title || node.label || '').toLowerCase()
+    return text.includes(searchQuery.toLowerCase())
   }, [searchQuery])
 
   const nodeRadius = useCallback((node) => {
+    if (viewMode === 'concepts') {
+      // Scale by note_count: min 6, max 20
+      return Math.min(Math.max(6, 6 + (node.note_count || 0) * 2), 20)
+    }
     return Math.min(Math.max(3, 3 + node.degree * 1.5), 14)
-  }, [])
+  }, [viewMode])
 
   const nodes = nodesRef.current
   const edges = edgesRef.current
@@ -260,6 +308,25 @@ export default function KnowledgeGraph() {
   const edgeColor = dark ? '#ffffff' : '#000000'
   const labelColor = dark ? '#555' : '#999'
   const hoverLabelColor = dark ? '#aaa' : '#444'
+
+  // Toggle button style helper
+  const toggleBtnStyle = (active) => ({
+    background: active
+      ? (dark ? 'rgba(80,90,100,0.5)' : 'rgba(0,0,0,0.08)')
+      : (dark ? 'rgba(20,20,20,0.6)' : 'rgba(255,255,255,0.6)'),
+    backdropFilter: 'blur(12px)',
+    color: active
+      ? (dark ? '#bbb' : '#333')
+      : (dark ? '#555' : '#999'),
+    borderColor: active
+      ? (dark ? '#444' : '#bbb')
+      : (dark ? '#222' : '#ddd'),
+  })
+
+  // Empty state message varies by view
+  const emptyMessage = viewMode === 'concepts'
+    ? 'study more notes to build your concept map'
+    : 'create notes to see your knowledge graph'
 
   return (
     <Layout>
@@ -285,13 +352,34 @@ export default function KnowledgeGraph() {
           />
         </div>
 
-        {/* Stats — top-right */}
+        {/* View toggle — top-right area, above stats */}
+        <div
+          className="absolute top-3 right-5 z-10 flex items-center gap-1"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
+          <button
+            onClick={() => setViewMode('notes')}
+            className="px-2.5 py-1 rounded border text-[10px] tracking-wider uppercase transition-colors"
+            style={toggleBtnStyle(viewMode === 'notes')}
+          >
+            Notes
+          </button>
+          <button
+            onClick={() => setViewMode('concepts')}
+            className="px-2.5 py-1 rounded border text-[10px] tracking-wider uppercase transition-colors"
+            style={toggleBtnStyle(viewMode === 'concepts')}
+          >
+            Concepts
+          </button>
+        </div>
+
+        {/* Stats — below toggle */}
         {nodes.length > 0 && (
           <div
-            className="absolute top-4 right-5 z-10 text-[10px] tracking-wider uppercase"
+            className="absolute top-10 right-5 z-10 text-[10px] tracking-wider uppercase"
             style={{ color: dark ? '#2a2a2a' : '#ccc', fontFamily: 'var(--font-mono, monospace)' }}
           >
-            {nodes.length} nodes &middot; {edges.length} edges
+            {nodes.length} {viewMode === 'concepts' ? 'concepts' : 'nodes'} &middot; {edges.length} edges
           </div>
         )}
 
@@ -313,7 +401,7 @@ export default function KnowledgeGraph() {
                 />
               </div>
               <span className="text-[11px] tracking-widest uppercase" style={{ color: dark ? '#333' : '#aaa' }}>
-                mapping connections
+                {viewMode === 'concepts' ? 'mapping concepts' : 'mapping connections'}
               </span>
             </div>
           </div>
@@ -332,10 +420,10 @@ export default function KnowledgeGraph() {
                 </svg>
               </div>
               <p className="text-xs mb-1" style={{ color: dark ? '#444' : '#999' }}>
-                no connections yet
+                {viewMode === 'concepts' ? 'no concepts yet' : 'no connections yet'}
               </p>
               <p className="text-[11px]" style={{ color: dark ? '#2a2a2a' : '#bbb' }}>
-                create notes to see your knowledge graph
+                {emptyMessage}
               </p>
             </div>
           </div>
@@ -444,13 +532,20 @@ export default function KnowledgeGraph() {
                 (e.source === hoveredNode && e.target === node.id) ||
                 (e.target === hoveredNode && e.source === node.id)
               )
-              const color = getNodeColor(node.degree)
+              const isConcept = viewMode === 'concepts'
+              const color = isConcept
+                ? getConceptColor(node.mastery_pct, dark)
+                : getNodeColor(node.degree)
               const r = nodeRadius(node)
               const displayR = isHovered ? r * 1.6 : r
 
               let opacity = 1
               if (searchQuery.trim() && !matches) opacity = 0.08
               else if (hoveredNode && !isHovered && !isNeighbor) opacity = 0.25
+
+              // In concepts view, always show labels; in notes view, only for hover / high-degree
+              const showLabel = isConcept || isHovered || node.degree >= 4
+              const nodeDisplayName = isConcept ? (node.label || 'unnamed') : (node.title || 'untitled')
 
               return (
                 <g
@@ -466,7 +561,10 @@ export default function KnowledgeGraph() {
                   onClick={(e) => {
                     if (!dragNode) {
                       e.stopPropagation()
-                      navigate(`/notes/${node.id}`)
+                      if (!isConcept) {
+                        navigate(`/notes/${node.id}`)
+                      }
+                      // Concepts view: click just highlights connected nodes (hover already does this)
                     }
                   }}
                 >
@@ -490,8 +588,8 @@ export default function KnowledgeGraph() {
                     style={{ pointerEvents: 'none' }}
                   />
 
-                  {/* Label — only on hover or for high-degree nodes */}
-                  {(isHovered || node.degree >= 4) && (
+                  {/* Label */}
+                  {showLabel && (
                     <text
                       x={node.x}
                       y={node.y + displayR + (isHovered ? 16 : 12)}
@@ -505,18 +603,41 @@ export default function KnowledgeGraph() {
                         letterSpacing: '0.02em',
                       }}
                     >
-                      {isHovered ? (node.title || 'untitled') : truncate(node.title, 14)}
+                      {isHovered ? nodeDisplayName : truncate(nodeDisplayName, 14)}
                     </text>
                   )}
                 </g>
               )
             })}
 
-            {/* Hover detail — connection count */}
+            {/* Hover detail — tooltip above node */}
             {hoveredNode && (() => {
               const node = nodeMap[hoveredNode]
               if (!node) return null
               const r = nodeRadius(node) * 1.6
+              const isConcept = viewMode === 'concepts'
+
+              if (isConcept) {
+                const mastery = node.mastery_pct != null ? `${Math.round(node.mastery_pct)}% mastery` : 'no mastery data'
+                const notes = `${node.note_count || 0} note${(node.note_count || 0) !== 1 ? 's' : ''}`
+                return (
+                  <text
+                    x={node.x}
+                    y={node.y - r - 8}
+                    textAnchor="middle"
+                    fontSize={8}
+                    fill={dark ? '#444' : '#aaa'}
+                    style={{
+                      pointerEvents: 'none',
+                      fontFamily: 'var(--font-mono, monospace)',
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    {mastery}, {notes}
+                  </text>
+                )
+              }
+
               return (
                 <text
                   x={node.x}

@@ -115,8 +115,40 @@ export const useChat = ({
             return updated
           })
         }
+        if (chunk.type === 'notes_search_start') {
+          setMessages(prev => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            if (last?.role === 'assistant') {
+              updated[updated.length - 1] = {
+                ...last,
+                noteSearchStatus: { searching: true, query: chunk.query },
+              }
+            }
+            return updated
+          })
+        }
+        if (chunk.type === 'notes_search') {
+          setMessages(prev => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            if (last?.role === 'assistant') {
+              updated[updated.length - 1] = {
+                ...last,
+                noteSearchStatus: null,
+                noteResults: chunk.results,
+              }
+            }
+            return updated
+          })
+        }
         if (chunk.type === 'error') {
-          assistantContent = 'Sorry, something went wrong. Please try again.'
+          if (chunk.code === 'api_key_required') {
+            window.dispatchEvent(new CustomEvent('api-key-required'))
+            assistantContent = 'An API key is required to use AI features. Add your key in Settings.'
+          } else {
+            assistantContent = 'Sorry, something went wrong. Please try again.'
+          }
           setMessages(prev => {
             const updated = [...prev]
             updated[updated.length - 1] = { role: 'assistant', content: assistantContent }

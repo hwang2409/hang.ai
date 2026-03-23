@@ -393,7 +393,7 @@ html.light .context-menu-stagger .bg-\[rgba\(136\,68\,68\,0\.08\)\] { background
 
 .theme-toggle-btn {
   position: fixed;
-  bottom: 20px;
+  bottom: 52px;
   right: 20px;
   z-index: 90;
   width: 34px;

@@ -19,6 +19,17 @@ async def fire_webhook(integration: UserIntegration, event: str, data: dict) -> 
     if not url:
         return
 
+    # Block SSRF: only allow http(s) and reject private IPs
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        logger.warning("Webhook blocked: invalid scheme %s", parsed.scheme)
+        return
+    hostname = parsed.hostname or ""
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+        logger.warning("Webhook blocked: private IP %s", hostname)
+        return
+
     events = config.get("events", {})
     if not events.get(event, False):
         return
@@ -41,6 +52,14 @@ async def fire_webhook(integration: UserIntegration, event: str, data: dict) -> 
 
 async def fire_test_webhook(url: str) -> tuple[bool, int | None, str | None]:
     """Send a test webhook to verify URL works. Returns (success, status_code, error)."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return False, None, "Only http(s) URLs allowed"
+    hostname = parsed.hostname or ""
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+        return False, None, "Private/local URLs not allowed"
+
     payload = {
         "text": "Test notification from Neuronic — your webhook is working!",
         "event": "test",
@@ -80,6 +99,10 @@ def _build_summary(event: str, data: dict) -> str:
     if event == "study_streak":
         streak = data.get("streak", 0)
         return f"Study streak milestone: {streak} days! Keep it going!"
+
+    if event == "study_nudge":
+        count = data.get("count", 0)
+        return f"Neuronic generated {count} study nudge{'s' if count != 1 else ''} for you today"
 
     return f"Neuronic notification: {event}"
 

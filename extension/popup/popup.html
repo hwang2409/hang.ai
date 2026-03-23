@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Loading -->
+  <div id="view-loading" class="view">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Login -->
+  <div id="view-login" class="view hidden">
+    <div class="logo">N</div>
+    <h1>Neuronic</h1>
+    <form id="login-form">
+      <input type="email" id="email" placeholder="Email" required autocomplete="email">
+      <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+      <input type="url" id="server-url" placeholder="Server URL" value="http://localhost:8000">
+      <button type="submit" id="login-btn">Connect</button>
+      <div id="login-error" class="error hidden"></div>
+    </form>
+  </div>
+
+  <!-- Saving -->
+  <div id="view-saving" class="view hidden">
+    <div class="save-header">
+      <div class="spinner-sm"></div>
+      <div class="save-info">
+        <div class="saved-title">Saving to Neuronic...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved -->
+  <div id="view-saved" class="view hidden">
+    <div class="save-header">
+      <div class="save-icon">
+        <svg class="checkmark" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="save-info">
+        <div id="saved-title" class="saved-title"></div>
+        <div id="saved-subtitle" class="saved-subtitle"></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Folder</label>
+      <select id="folder-select" class="folder-select">
+        <option value="">No folder</option>
+      </select>
+    </div>
+
+    <button id="done-btn" class="btn-done">Done</button>
+  </div>
+
+  <!-- Error -->
+  <div id="view-error" class="view hidden">
+    <div class="save-header">
+      <div class="save-icon error-icon">!</div>
+      <div class="save-info">
+        <div class="error-title">Failed to save</div>
+        <div id="error-detail" class="error-detail"></div>
+      </div>
+    </div>
+    <button id="retry-btn" class="btn-done">Retry</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

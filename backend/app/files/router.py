@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import FileResponse as StarletteFileResponse
 
 from app.config import settings
+from app.crypto import decrypt_api_key
 from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.files.models import UploadedFile
@@ -172,7 +173,13 @@ async def upload_file_endpoint(
 
     # Trigger background transcription for audio files
     if file_type == "audio":
-        background_tasks.add_task(transcribe_audio_background, record.id, file_path)
+        _oai_key = None
+        if current_user.encrypted_openai_key:
+            try:
+                _oai_key = decrypt_api_key(current_user.encrypted_openai_key)
+            except Exception:
+                pass
+        background_tasks.add_task(transcribe_audio_background, record.id, file_path, _oai_key)
 
     return _file_to_response(record)
 
@@ -304,6 +311,34 @@ async def get_file_text(
     return {"text": f.extracted_text, "source_name": f.original_name}
 
 
+class FileUpdate(BaseModel):
+    folder_id: Optional[int] = None
+
+
+@router.patch("/{file_id}", response_model=FileResponse)
+async def update_file(
+    file_id: int,
+    body: FileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(UploadedFile).where(
+            UploadedFile.id == file_id,
+            UploadedFile.user_id == current_user.id,
+            UploadedFile.deleted == False,
+        )
+    )
+    f = result.scalar_one_or_none()
+    if not f:
+        raise HTTPException(404, "File not found")
+    if body.folder_id is not None:
+        f.folder_id = body.folder_id if body.folder_id != 0 else None
+    await db.commit()
+    await db.refresh(f)
+    return _file_to_response(f)
+
+
 @router.delete("/{file_id}", status_code=204)
 async def delete_file(
     file_id: int,
@@ -331,8 +366,14 @@ async def transcribe_file(
     current_user: User = Depends(get_current_user),
 ):
     """Manually trigger transcription for an audio file."""
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(400, "Transcription unavailable: OPENAI_API_KEY not configured")
+    _oai_key = None
+    if current_user.encrypted_openai_key:
+        try:
+            _oai_key = decrypt_api_key(current_user.encrypted_openai_key)
+        except Exception:
+            pass
+    if not settings.OPENAI_API_KEY and not _oai_key:
+        raise HTTPException(400, "Transcription unavailable: no OpenAI API key configured")
 
     result = await db.execute(
         select(UploadedFile).where(
@@ -351,7 +392,7 @@ async def transcribe_file(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         f.file_path,
     )
-    background_tasks.add_task(transcribe_audio_background, f.id, abs_path)
+    background_tasks.add_task(transcribe_audio_background, f.id, abs_path, _oai_key)
     return {"status": "transcribing"}
 
 

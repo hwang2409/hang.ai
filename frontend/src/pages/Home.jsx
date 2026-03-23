@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown, FileText, Download, CheckSquare, Square, BookOpen } from 'lucide-react'
+import { Plus, Search, Trash2, ExternalLink, Copy, PenTool, LayoutGrid, Upload, Folder, ChevronRight, ChevronDown, FileText, Download, CheckSquare, Square, BookOpen, GitMerge } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import ContextMenu from '../components/ContextMenu'
@@ -28,6 +28,7 @@ export default function Home() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedNotes, setSelectedNotes] = useState(new Set())
   const [compiling, setCompiling] = useState(false)
+  const [merging, setMerging] = useState(false)
   const createMenuRef = useRef(null)
   const navigate = useNavigate()
   const debounceRef = useRef(null)
@@ -199,6 +200,21 @@ export default function Home() {
     }
   }
 
+  const handleMergeNotes = async () => {
+    if (selectedNotes.size < 2) return
+    setMerging(true)
+    try {
+      const doc = await api.post('/notes/merge', { note_ids: [...selectedNotes] })
+      setSelectMode(false)
+      setSelectedNotes(new Set())
+      navigate(`/notes/${doc.id}`)
+    } catch (err) {
+      console.error('Failed to merge notes:', err)
+    } finally {
+      setMerging(false)
+    }
+  }
+
   const handleNoteContext = (e, noteId) => {
     e.preventDefault()
     e.stopPropagation()
@@ -348,6 +364,18 @@ export default function Home() {
                     <BookOpen size={16} />
                   )}
                   {compiling ? 'compiling...' : `compile guide (${selectedNotes.size})`}
+                </button>
+                <button
+                  onClick={handleMergeNotes}
+                  disabled={selectedNotes.size < 2 || merging}
+                  className="bg-[#c4a759] text-[#0a0a0a] hover:bg-[#d4b86a] font-medium rounded-md px-4 py-2 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+                >
+                  {merging ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full" />
+                  ) : (
+                    <GitMerge size={16} />
+                  )}
+                  {merging ? 'merging...' : `merge (${selectedNotes.size})`}
                 </button>
                 <button
                   onClick={() => { setSelectMode(false); setSelectedNotes(new Set()) }}

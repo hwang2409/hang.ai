@@ -19,9 +19,12 @@ from app.quizzes.schemas import (
     QuizAttemptListResponse,
     QuizStatsResponse,
 )
+from app.crypto import decrypt_api_key
 from app.llm.service import evaluate_text
+from app.llm.context import get_learner_context, inject_learner_context
 from app.llm.response_parser import parse_llm_json
 from app.rate_limit import limiter
+from app.automations.engine import fire_event
 
 router = APIRouter()
 
@@ -59,7 +62,18 @@ async def generate_quiz(
         f"Study material:\n{note.content}"
     )
 
-    raw_response = await evaluate_text(prompt)
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
+    learner_ctx = await get_learner_context(db, current_user)
+    from app.llm.prompts import VOICE
+    system = inject_learner_context(VOICE, learner_ctx)
+
+    raw_response = await evaluate_text(prompt, system_prompt=system, api_key=api_key)
 
     try:
         questions_data = parse_llm_json(raw_response)
@@ -337,14 +351,8 @@ async def submit_quiz(
         if not question:
             continue
 
-        # Grade based on question type
-        is_correct = False
-        if question.question_type == "true_false":
-            is_correct = ans.user_answer.strip().lower() == question.correct_answer.strip().lower()
-        elif question.question_type == "fill_blank":
-            is_correct = ans.user_answer.strip().lower() == question.correct_answer.strip().lower()
-        else:  # multiple_choice
-            is_correct = ans.user_answer.strip() == question.correct_answer.strip()
+        # Grade based on question type (case-insensitive for all types)
+        is_correct = ans.user_answer.strip().lower() == question.correct_answer.strip().lower()
 
         if is_correct:
             score += 1
@@ -407,6 +415,29 @@ async def submit_quiz(
             )
 
     background_tasks.add_task(_fire_quiz_webhook)
+
+    from app.social.activity import log_activity
+    background_tasks.add_task(
+        log_activity, current_user.id, "quiz_complete",
+        {"title": quiz.title, "score": score, "total": len(questions), "quiz_id": quiz.id},
+    )
+
+    total = len(questions)
+    background_tasks.add_task(fire_event, current_user.id, "quiz_completed", {
+        "quiz_id": quiz.id, "title": quiz.title, "score": score, "total": total,
+        "pct": round(score / total * 100, 1) if total > 0 else 0,
+        "note_id": quiz.note_id,
+    })
+
+    if quiz.note_id:
+        async def _update_review():
+            from app.reviews.service import update_review_from_activity
+            from app.database import async_session
+            async with async_session() as s:
+                quality = 4 if (total > 0 and score / total >= 0.7) else 2
+                await update_review_from_activity(s, current_user.id, quiz.note_id, quality)
+                await s.commit()
+        background_tasks.add_task(_update_review)
 
     return QuizAttemptResponse(
         id=attempt.id,

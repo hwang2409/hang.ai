@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +8,7 @@ from app.deps import get_db, get_current_user
 from app.auth.models import User
 from app.pomodoro.models import StudySession
 from app.pomodoro.schemas import CreateSessionRequest, SessionResponse, StatsResponse, AnalyticsResponse, WeeklyHours
+from app.automations.engine import fire_event
 
 router = APIRouter()
 
@@ -15,6 +16,7 @@ router = APIRouter()
 @router.post("", response_model=SessionResponse, status_code=201)
 async def create_session(
     body: CreateSessionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -32,6 +34,18 @@ async def create_session(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+
+    from app.social.activity import log_activity
+    background_tasks.add_task(
+        log_activity, current_user.id, "study_session",
+        {"duration_minutes": body.duration_minutes, "session_type": body.session_type, "label": body.label},
+    )
+
+    if body.completed:
+        background_tasks.add_task(fire_event, current_user.id, "pomodoro_completed", {
+            "duration_minutes": body.duration_minutes, "note_id": body.note_id, "label": body.label or "",
+        })
+
     return session
 
 
@@ -112,7 +126,9 @@ async def get_stats(
     # Streak: count consecutive days with at least one focus session
     streak = 0
     check_date = today_start
-    while True:
+    max_streak_check = 365
+    while max_streak_check > 0:
+        max_streak_check -= 1
         day_end = check_date + timedelta(days=1)
         result = await db.execute(
             select(func.count(StudySession.id)).where(

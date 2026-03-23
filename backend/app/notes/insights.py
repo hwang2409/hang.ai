@@ -6,8 +6,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crypto import decrypt_api_key
 from app.deps import get_db, get_current_user
 from app.auth.models import User
+from app.llm.service import ApiKeyRequiredError
 from app.notes.models import Document, NoteAnalysis
 from app.notes.schemas import DocumentResponse
 
@@ -18,7 +20,7 @@ router = APIRouter()
 
 # ── Note Analysis ──────────────────────────────────────────────────────────────
 
-async def analyze_document_background(doc_id: int, content: str, title: str):
+async def analyze_document_background(doc_id: int, content: str, title: str, api_key: str | None = None):
     """Background task: run LLM analysis on note content and cache results."""
     from app.database import async_session
     from app.llm.service import evaluate_text
@@ -53,12 +55,15 @@ Return ONLY a JSON object with these fields:
 If a field has no items, use an empty array. Always include all fields."""
 
         try:
-            raw = await evaluate_text(prompt)
+            raw = await evaluate_text(prompt, api_key=api_key)
             analysis = parse_llm_json(raw)
             # Validate structure
             for key in ("summary", "concepts", "definitions", "formulas", "suggested_tags", "prerequisites"):
                 if key not in analysis:
                     analysis[key] = [] if key != "summary" else ""
+        except ApiKeyRequiredError:
+            logger.debug("Skipping document analysis - no API key configured")
+            return
         except Exception:
             return  # Silently fail — analysis is optional
 
@@ -74,6 +79,29 @@ If a field has no items, use an empty array. Always include all fields."""
                 content_hash=content_hash,
             ))
         await db.commit()
+
+        # Sync extracted concepts into knowledge layer
+        try:
+            from app.knowledge.service import sync_concepts_from_analysis
+            doc_result = await db.execute(
+                select(Document.user_id).where(Document.id == doc_id)
+            )
+            owner_id = doc_result.scalar_one_or_none()
+            if owner_id:
+                await sync_concepts_from_analysis(db, owner_id, doc_id, analysis)
+                await db.commit()
+        except Exception:
+            logger.debug("Concept sync failed for doc %d", doc_id, exc_info=True)
+
+        # Seed spaced-repetition review schedule for this note
+        try:
+            from app.reviews.service import ensure_note_review_schedule
+            # owner_id already fetched earlier
+            if owner_id:
+                await ensure_note_review_schedule(db, owner_id, doc_id, title)
+                await db.commit()
+        except Exception:
+            logger.debug("Review schedule seed failed for doc %d", doc_id, exc_info=True)
 
 
 @router.get("/{doc_id}/analysis")
@@ -124,7 +152,13 @@ async def trigger_document_analysis(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    background_tasks.add_task(analyze_document_background, doc.id, doc.content or "", doc.title or "")
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+    background_tasks.add_task(analyze_document_background, doc.id, doc.content or "", doc.title or "", api_key)
     return {"status": "analyzing"}
 
 
@@ -154,6 +188,13 @@ async def generate_cheatsheet(
     from app.llm.service import evaluate_text
     from app.llm.response_parser import parse_llm_json
 
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
     prompt = f"""Create a concise, exam-ready cheat sheet from the following study material.
 
 Title: {doc.title or 'Untitled'}
@@ -172,11 +213,13 @@ Return ONLY a JSON object with these fields:
 Keep each point brief (1-2 sentences max). Prioritize memorability and exam relevance. If a field has no items, use an empty array."""
 
     try:
-        raw = await evaluate_text(prompt)
+        raw = await evaluate_text(prompt, api_key=api_key)
         cheatsheet = parse_llm_json(raw)
         for key in ("title", "sections", "key_facts", "formulas", "mnemonics", "common_mistakes"):
             if key not in cheatsheet:
                 cheatsheet[key] = [] if key != "title" else (doc.title or "Cheat Sheet")
+    except ApiKeyRequiredError:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to generate cheat sheet")
 
@@ -209,6 +252,13 @@ async def generate_outline(
     from app.llm.service import evaluate_text
     from app.llm.response_parser import parse_llm_json
 
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
     prompt = f"""Create a structured outline from the following study material. Extract the key hierarchy of ideas.
 
 Title: {doc.title or 'Untitled'}
@@ -226,12 +276,14 @@ Return ONLY a JSON object with these fields:
 Keep the outline concise and well-organized. Maximum 4 levels of depth. Focus on the logical structure and flow of ideas."""
 
     try:
-        raw = await evaluate_text(prompt)
+        raw = await evaluate_text(prompt, api_key=api_key)
         outline = parse_llm_json(raw)
         if "title" not in outline:
             outline["title"] = doc.title or "Outline"
         if "items" not in outline:
             outline["items"] = []
+    except ApiKeyRequiredError:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to generate outline")
 
@@ -281,6 +333,13 @@ async def compile_study_guide(
 
     from app.llm.service import evaluate_text
 
+    api_key = None
+    if current_user.encrypted_anthropic_key:
+        try:
+            api_key = decrypt_api_key(current_user.encrypted_anthropic_key)
+        except Exception:
+            pass
+
     prompt = (
         "Compile and synthesize the following notes into a single, well-organized study guide.\n\n"
         "Requirements:\n"
@@ -295,7 +354,7 @@ async def compile_study_guide(
         "Start directly with the content, no preamble."
     )
 
-    guide_content = await evaluate_text(prompt)
+    guide_content = await evaluate_text(prompt, api_key=api_key)
 
     guide_title = body.get("title") or f"Study Guide — {', '.join(titles[:3])}"
     if len(titles) > 3:

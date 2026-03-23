@@ -33,6 +33,16 @@ async def init_db() -> None:
     import app.lookups.models  # noqa: F401
     import app.quizzes.models  # noqa: F401
     import app.integrations.models  # noqa: F401
+    import app.social.models  # noqa: F401
+    import app.forum.models  # noqa: F401
+    import app.notifications.models  # noqa: F401
+    import app.knowledge.models  # noqa: F401
+    import app.automations.models  # noqa: F401
+    import app.reviews.models  # noqa: F401
+    import app.plugins.models  # noqa: F401
+
+    from app.plugins.loader import discover_plugins
+    discover_plugins()
 
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA journal_mode=WAL"))
@@ -110,3 +120,93 @@ async def init_db() -> None:
             ))
         except Exception:
             pass  # Column already exists
+        try:
+            await conn.execute(text(
+                "ALTER TABLE group_shared_notes ADD COLUMN permission VARCHAR(10) DEFAULT 'view'"
+            ))
+        except Exception:
+            pass  # Column already exists
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_questions ADD COLUMN downvote_count INTEGER DEFAULT 0"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_answers ADD COLUMN downvote_count INTEGER DEFAULT 0"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_votes ADD COLUMN direction INTEGER DEFAULT 1"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE group_messages ADD COLUMN is_pinned INTEGER DEFAULT 0"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_questions ADD COLUMN status VARCHAR(20) DEFAULT 'open'"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_questions ADD COLUMN duplicate_of_id INTEGER REFERENCES forum_questions(id)"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_questions ADD COLUMN bounty INTEGER DEFAULT 0"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE forum_questions ADD COLUMN bounty_expires_at DATETIME"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN reputation INTEGER DEFAULT 1"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN bio TEXT"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN encrypted_anthropic_key TEXT"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN encrypted_openai_key TEXT"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN nudge_preferences TEXT DEFAULT '{}'"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN contextual_ai BOOLEAN DEFAULT 1"
+            ))
+        except Exception:
+            pass

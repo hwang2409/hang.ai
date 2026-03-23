@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Integer, String, func
+from sqlalchemy import Boolean, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -23,4 +23,10 @@ class User(Base):
     pomodoro_focus: Mapped[int] = mapped_column(Integer, default=25, server_default="25")
     pomodoro_short_break: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
     pomodoro_long_break: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
+    reputation: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_anthropic_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_openai_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nudge_preferences: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    contextual_ai: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     created_at: Mapped[datetime] = mapped_column(default=func.now())

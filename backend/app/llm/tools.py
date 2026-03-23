@@ -50,6 +50,18 @@ SEARCH_IMAGES_TOOL = {
     },
 }
 
+SEARCH_NOTES_TOOL = {
+    "name": "search_notes",
+    "description": "Search the user's notes and flashcards for relevant information. Use when the user asks about something they may have studied, or when you need to reference their existing knowledge base.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query to find relevant notes"}
+        },
+        "required": ["query"]
+    }
+}
+
 
 async def _handle_search_images(tool_call) -> tuple[str, list[dict]]:
     """Query SearXNG for image results and return direct image URLs."""
@@ -448,8 +460,27 @@ async def _handle_edit_moodboard(tool_call, db: AsyncSession, note_id: int) -> t
     return "; ".join(summaries) or "No operations performed.", sse_events
 
 
+async def _handle_search_notes(tool_call, db: AsyncSession, user_id: int) -> tuple[str, list[dict]]:
+    """Search user's notes via RAG retrieval and return results."""
+    from app.llm.context import retrieve_relevant_notes
+
+    query = tool_call.input.get("query", "")
+    results = await retrieve_relevant_notes(db, user_id, query, limit=5)
+
+    if not results:
+        return "No matching notes found.", []
+
+    lines = []
+    for n in results:
+        lines.append(f"[Note: {n['title']}] (id:{n['id']}, score:{n['score']})\n{n['snippet']}")
+    result_text = "\n\n".join(lines)
+
+    sse_events = [{"type": "notes_search", "results": results}]
+    return result_text, sse_events
+
+
 async def execute_tool(
-    tool_call, db: AsyncSession, note_id: int | None
+    tool_call, db: AsyncSession, note_id: int | None, user_id: int | None = None,
 ) -> tuple[str, list[dict]]:
     """Execute a tool call. Returns (result_text, sse_events_to_emit)."""
     if tool_call.name == "edit_note" and note_id:
@@ -460,4 +491,6 @@ async def execute_tool(
         return await _handle_edit_moodboard(tool_call, db, note_id)
     if tool_call.name == "search_images":
         return await _handle_search_images(tool_call)
+    if tool_call.name == "search_notes" and user_id:
+        return await _handle_search_notes(tool_call, db, user_id)
     return "Unknown tool.", []

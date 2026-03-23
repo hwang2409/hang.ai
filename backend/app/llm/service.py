@@ -5,7 +5,15 @@ import anthropic
 
 from app.config import settings
 
-client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+class ApiKeyRequiredError(Exception):
+    """Raised when no API key is available for LLM calls."""
+    pass
+
+
+_default_client: anthropic.AsyncAnthropic | None = None
+if settings.ANTHROPIC_API_KEY:
+    _default_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 _llm_semaphore = asyncio.Semaphore(20)
 
@@ -14,13 +22,22 @@ from app.llm.prompts import VOICE
 DEFAULT_SYSTEM = VOICE
 
 
+def _get_client(api_key: str | None = None) -> anthropic.AsyncAnthropic:
+    if api_key:
+        return anthropic.AsyncAnthropic(api_key=api_key)
+    if _default_client is not None:
+        return _default_client
+    raise ApiKeyRequiredError("An Anthropic API key is required. Add your key in Settings.")
+
+
 async def stream_chat(
-    messages: list[dict], system_prompt: str = ""
+    messages: list[dict], system_prompt: str = "", api_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Yield text chunks from Claude streaming response."""
     system = system_prompt or DEFAULT_SYSTEM
+    c = _get_client(api_key)
     async with _llm_semaphore:
-        async with client.messages.stream(
+        async with c.messages.stream(
             model=settings.CLAUDE_MODEL,
             max_tokens=4096,
             system=system,
@@ -35,6 +52,7 @@ async def stream_chat_with_tools(
     system_prompt: str = "",
     tools: list[dict] | None = None,
     images: list[dict] | None = None,
+    api_key: str | None = None,
 ) -> AsyncGenerator[tuple[str, object], None]:
     """Yield (event_type, data) tuples — 'text' for chunks, 'tool_use' for tool calls,
     'search_start'/'search_results' for built-in web search lifecycle."""
@@ -75,9 +93,10 @@ async def stream_chat_with_tools(
     if tools:
         kwargs["tools"] = tools
 
+    c = _get_client(api_key)
     final_message = None
     async with _llm_semaphore:
-        async with client.messages.stream(**kwargs) as stream:
+        async with c.messages.stream(**kwargs) as stream:
             async for event in stream:
                 # Built-in web search: server_tool_use starts a search
                 if event.type == "content_block_start":
@@ -124,11 +143,12 @@ async def stream_chat_with_tools(
             yield ("assistant_content", serialized)
 
 
-async def evaluate_text(prompt: str, system_prompt: str = "") -> str:
+async def evaluate_text(prompt: str, system_prompt: str = "", api_key: str | None = None) -> str:
     """Non-streaming single response from Claude."""
     system = system_prompt or DEFAULT_SYSTEM
+    c = _get_client(api_key)
     async with _llm_semaphore:
-        response = await client.messages.create(
+        response = await c.messages.create(
             model=settings.CLAUDE_MODEL,
             max_tokens=4096,
             system=system,
