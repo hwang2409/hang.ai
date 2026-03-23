@@ -11,10 +11,6 @@ class ApiKeyRequiredError(Exception):
     pass
 
 
-_default_client: anthropic.AsyncAnthropic | None = None
-if settings.ANTHROPIC_API_KEY:
-    _default_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
 _llm_semaphore = asyncio.Semaphore(20)
 
 from app.llm.prompts import VOICE
@@ -25,8 +21,6 @@ DEFAULT_SYSTEM = VOICE
 def _get_client(api_key: str | None = None) -> anthropic.AsyncAnthropic:
     if api_key:
         return anthropic.AsyncAnthropic(api_key=api_key)
-    if _default_client is not None:
-        return _default_client
     raise ApiKeyRequiredError("An Anthropic API key is required. Add your key in Settings.")
 
 
