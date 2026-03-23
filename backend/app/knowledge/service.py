@@ -190,9 +190,23 @@ async def check_readiness(db: AsyncSession, user_id: int, note_id: int) -> dict:
     if not prerequisites:
         return {"total": 0, "known": 0, "coverage_pct": 100, "prerequisites": []}
 
-    # Get user's known concepts
+    # Get user's known concepts — only those taught in at least one
+    # OTHER non-deleted document (source_type="concept"), excluding the
+    # current note so it can't satisfy its own prerequisites
     result = await db.execute(
-        select(UserConcept).where(UserConcept.user_id == user_id)
+        select(UserConcept)
+        .where(UserConcept.user_id == user_id)
+        .where(
+            UserConcept.id.in_(
+                select(ConceptSource.concept_id)
+                .join(Document, Document.id == ConceptSource.document_id)
+                .where(
+                    ConceptSource.source_type == "concept",
+                    Document.deleted == False,
+                    Document.id != note_id,
+                )
+            )
+        )
     )
     user_concepts = result.scalars().all()
 
@@ -232,7 +246,43 @@ async def check_readiness(db: AsyncSession, user_id: int, note_id: int) -> dict:
                 "known": False,
                 "mastery_pct": None,
                 "matched_concept": None,
+                "suggested_note_id": None,
+                "suggested_note_title": None,
             })
+
+    # Batch-lookup suggested notes for unknown prerequisites
+    unknown_prereqs = [p for p in prereq_results if not p["known"]]
+    if unknown_prereqs:
+        unknown_norms = [normalize_concept(p["concept"]) for p in unknown_prereqs]
+        # Find ConceptSource entries where these concepts are taught (source_type="concept")
+        source_result = await db.execute(
+            select(
+                UserConcept.normalized,
+                ConceptSource.document_id,
+                Document.title,
+                Document.updated_at,
+            )
+            .join(ConceptSource, ConceptSource.concept_id == UserConcept.id)
+            .join(Document, Document.id == ConceptSource.document_id)
+            .where(
+                UserConcept.normalized.in_(unknown_norms),
+                ConceptSource.source_type == "concept",
+                Document.deleted == False,
+                Document.id != note_id,
+            )
+            .order_by(Document.updated_at.desc())
+        )
+        # Build map: normalized_concept -> (doc_id, doc_title) using first (most recent) match
+        suggestion_map: dict[str, tuple[int, str]] = {}
+        for row in source_result.all():
+            if row.normalized not in suggestion_map:
+                suggestion_map[row.normalized] = (row.document_id, row.title)
+
+        for p in unknown_prereqs:
+            norm = normalize_concept(p["concept"])
+            if norm in suggestion_map:
+                p["suggested_note_id"] = suggestion_map[norm][0]
+                p["suggested_note_title"] = suggestion_map[norm][1]
 
     total = len(prereq_results)
     return {

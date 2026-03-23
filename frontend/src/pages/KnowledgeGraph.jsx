@@ -4,66 +4,54 @@ import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
 
-// Muted, cohesive palette — cold-to-warm gradient based on connectivity
+// --- Obsidian-style palette ---
+
+// Notes view: luminous constellation colors based on connectivity
 const NODE_PALETTE = [
-  '#4a6670', // isolated — slate
-  '#5a7a8a', // low — steel blue
-  '#7a9aa8', // moderate — dusty cyan
-  '#a8b8a0', // connected — sage
-  '#c8b078', // hub — warm amber
-  '#d4a060', // major hub — gold
+  '#8b9dc3', // isolated — soft periwinkle
+  '#a0b4d4', // low — pale steel
+  '#b8cce8', // moderate — light blue
+  '#c9d4f0', // connected — lavender ice
+  '#ddd6f3', // hub — soft violet
+  '#e8d5f5', // major hub — luminous lilac
 ]
 
-// Mastery palette for concept nodes — dark theme
+// Mastery palette for concept nodes — dark theme (soft neon tints)
 const MASTERY_PALETTE_DARK = [
-  { min: 0,  max: 20,  color: '#8b5a5a' }, // muted red — beginner
-  { min: 20, max: 40,  color: '#8b7a5a' }, // amber
-  { min: 40, max: 60,  color: '#7a8b5a' }, // olive
-  { min: 60, max: 80,  color: '#5a8b7a' }, // teal
-  { min: 80, max: 100, color: '#5a7a8b' }, // blue — mastered
+  { min: 0,  max: 20,  color: '#f47068' }, // red-coral
+  { min: 20, max: 40,  color: '#e8a855' }, // warm amber
+  { min: 40, max: 60,  color: '#c4d44a' }, // lime
+  { min: 60, max: 80,  color: '#56d6a0' }, // mint
+  { min: 80, max: 100, color: '#58a6ff' }, // bright blue
 ]
 
-// Mastery palette for concept nodes — light theme (slightly darker)
+// Mastery palette for concept nodes — light theme
 const MASTERY_PALETTE_LIGHT = [
-  { min: 0,  max: 20,  color: '#7a4a4a' },
-  { min: 20, max: 40,  color: '#7a6a4a' },
-  { min: 40, max: 60,  color: '#6a7a4a' },
-  { min: 60, max: 80,  color: '#4a7a6a' },
-  { min: 80, max: 100, color: '#4a6a7a' },
+  { min: 0,  max: 20,  color: '#d44030' },
+  { min: 20, max: 40,  color: '#c08020' },
+  { min: 40, max: 60,  color: '#80a020' },
+  { min: 60, max: 80,  color: '#20a070' },
+  { min: 80, max: 100, color: '#2070c0' },
 ]
 
-function getNodeColor(degree) {
+function getNodeColor(degree, dark) {
+  if (!dark) {
+    // Light mode: darker tones
+    const lightPalette = ['#5a6a8a', '#6a7a9a', '#7a8aaa', '#8a8ab0', '#9a80b0', '#a070b0']
+    const i = Math.min(Math.floor(degree / 2), lightPalette.length - 1)
+    return lightPalette[i]
+  }
   const i = Math.min(Math.floor(degree / 2), NODE_PALETTE.length - 1)
   return NODE_PALETTE[i]
 }
 
 function getConceptColor(mastery_pct, isDark) {
   const palette = isDark ? MASTERY_PALETTE_DARK : MASTERY_PALETTE_LIGHT
-  if (mastery_pct == null) return '#4a6670' // slate — no data
+  if (mastery_pct == null) return isDark ? '#8b9dc3' : '#5a6a8a'
   for (const band of palette) {
     if (mastery_pct >= band.min && mastery_pct < band.max) return band.color
   }
-  // 100% exactly falls in the last band
   return palette[palette.length - 1].color
-}
-
-function truncate(str, max = 18) {
-  if (!str) return 'untitled'
-  return str.length > max ? str.slice(0, max) + '\u2026' : str
-}
-
-// Compute a control point for a subtle curve between two nodes
-function edgePath(sx, sy, tx, ty) {
-  const mx = (sx + tx) / 2
-  const my = (sy + ty) / 2
-  const dx = tx - sx
-  const dy = ty - sy
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  // Perpendicular offset scaled by distance — subtle arc
-  const off = dist * 0.08
-  const cx = mx - (dy / dist) * off
-  const cy = my + (dx / dist) * off
-  return `M${sx},${sy} Q${cx},${cy} ${tx},${ty}`
 }
 
 export default function KnowledgeGraph() {
@@ -79,12 +67,51 @@ export default function KnowledgeGraph() {
   const nodesRef = useRef([])
   const edgesRef = useRef([])
   const animRef = useRef(null)
+  const driftRef = useRef(null)
   const [, forceRender] = useState(0)
   const [viewBox, setViewBox] = useState({ x: -500, y: -400, w: 1000, h: 800 })
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ x: 0, y: 0, vbx: 0, vby: 0 })
   const [settled, setSettled] = useState(false)
-  const [viewMode, setViewMode] = useState('notes') // 'notes' or 'concepts'
+  const [viewMode, setViewMode] = useState('notes')
+  const [glowPhase, setGlowPhase] = useState(0)
+
+  // Animated glow pulse for hovered node
+  useEffect(() => {
+    let raf
+    let t = 0
+    const tick = () => {
+      t += 0.04
+      setGlowPhase(Math.sin(t) * 0.5 + 0.5) // 0..1 oscillation
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  // Ambient idle drift — tiny random velocities when settled
+  useEffect(() => {
+    if (!settled) {
+      if (driftRef.current) cancelAnimationFrame(driftRef.current)
+      return
+    }
+    const drift = () => {
+      const nodes = nodesRef.current
+      if (!nodes.length) return
+      let changed = false
+      nodes.forEach(n => {
+        if (dragNodeRef.current && n.id === dragNodeRef.current) return
+        // Tiny random nudge
+        n.x += (Math.random() - 0.5) * 0.15
+        n.y += (Math.random() - 0.5) * 0.15
+        changed = true
+      })
+      if (changed) forceRender(r => r + 1)
+      driftRef.current = requestAnimationFrame(drift)
+    }
+    driftRef.current = requestAnimationFrame(drift)
+    return () => { if (driftRef.current) cancelAnimationFrame(driftRef.current) }
+  }, [settled])
 
   // Load data for the active view
   const loadGraph = useCallback((mode) => {
@@ -94,6 +121,7 @@ export default function KnowledgeGraph() {
     nodesRef.current = []
     edgesRef.current = []
     if (animRef.current) cancelAnimationFrame(animRef.current)
+    if (driftRef.current) cancelAnimationFrame(driftRef.current)
     setViewBox({ x: -500, y: -400, w: 1000, h: 800 })
 
     const endpoint = mode === 'concepts' ? '/knowledge/graph' : '/search/knowledge-graph'
@@ -116,7 +144,6 @@ export default function KnowledgeGraph() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch graph data on mount and when viewMode changes
   useEffect(() => {
     loadGraph(viewMode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,6 +219,7 @@ export default function KnowledgeGraph() {
 
   useEffect(() => () => {
     if (animRef.current) cancelAnimationFrame(animRef.current)
+    if (driftRef.current) cancelAnimationFrame(driftRef.current)
   }, [])
 
   const screenToSVG = useCallback((clientX, clientY) => {
@@ -247,7 +275,7 @@ export default function KnowledgeGraph() {
   }, [])
 
   const handleSvgMouseDown = useCallback((e) => {
-    if (e.target === svgRef.current || e.target.closest('path') || e.target.tagName === 'rect') {
+    if (e.target === svgRef.current || e.target.closest('line') || e.target.tagName === 'rect') {
       isPanningRef.current = true
       panStartRef.current = {
         x: e.clientX,
@@ -293,45 +321,66 @@ export default function KnowledgeGraph() {
 
   const nodeRadius = useCallback((node) => {
     if (viewMode === 'concepts') {
-      // Scale by note_count: min 6, max 20
-      return Math.min(Math.max(6, 6 + (node.note_count || 0) * 2), 20)
+      return Math.min(Math.max(3, 3 + (node.note_count || 0) * 1.2), 10)
     }
-    return Math.min(Math.max(3, 3 + node.degree * 1.5), 14)
+    return Math.min(Math.max(3, 3 + node.degree * 1.0), 10)
   }, [viewMode])
 
   const nodes = nodesRef.current
   const edges = edgesRef.current
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
 
-  // Colors based on theme
-  const bg = dark ? '#0a0a0a' : '#f5f3ee'
-  const edgeColor = dark ? '#ffffff' : '#000000'
-  const labelColor = dark ? '#555' : '#999'
-  const hoverLabelColor = dark ? '#aaa' : '#444'
+  // Connected node set for hovered node
+  const connectedSet = useMemo(() => {
+    if (!hoveredNode) return new Set()
+    const s = new Set()
+    s.add(hoveredNode)
+    edges.forEach(e => {
+      if (e.source === hoveredNode) s.add(e.target)
+      if (e.target === hoveredNode) s.add(e.source)
+    })
+    return s
+  }, [hoveredNode, edges])
 
-  // Toggle button style helper
+  // Theme-aware colors
+  const bg = dark ? '#0d1117' : '#f0f0f5'
+  const edgeBaseColor = dark ? '#ffffff' : '#333333'
+
+  // Frosted glass style for controls
+  const glassStyle = {
+    background: dark ? 'rgba(13, 17, 23, 0.75)' : 'rgba(240, 240, 245, 0.8)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
+    boxShadow: dark
+      ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
+      : '0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
+  }
+
   const toggleBtnStyle = (active) => ({
+    ...glassStyle,
     background: active
-      ? (dark ? 'rgba(80,90,100,0.5)' : 'rgba(0,0,0,0.08)')
-      : (dark ? 'rgba(20,20,20,0.6)' : 'rgba(255,255,255,0.6)'),
-    backdropFilter: 'blur(12px)',
+      ? (dark ? 'rgba(88, 166, 255, 0.15)' : 'rgba(60, 100, 180, 0.12)')
+      : (dark ? 'rgba(13, 17, 23, 0.6)' : 'rgba(240, 240, 245, 0.6)'),
     color: active
-      ? (dark ? '#bbb' : '#333')
-      : (dark ? '#555' : '#999'),
+      ? (dark ? '#79c0ff' : '#3c64b4')
+      : (dark ? '#484f58' : '#8b8b9a'),
     borderColor: active
-      ? (dark ? '#444' : '#bbb')
-      : (dark ? '#222' : '#ddd'),
+      ? (dark ? 'rgba(88, 166, 255, 0.3)' : 'rgba(60, 100, 180, 0.25)')
+      : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'),
   })
 
-  // Empty state message varies by view
   const emptyMessage = viewMode === 'concepts'
     ? 'study more notes to build your concept map'
     : 'create notes to see your knowledge graph'
 
   return (
     <Layout>
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0 relative">
-        {/* Floating search — minimal, top-left */}
+      <div
+        className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0 relative"
+        style={{ background: bg }}
+      >
+        {/* Floating search — frosted glass */}
         <div
           className="absolute top-3 left-4 z-10 flex items-center gap-3"
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -340,89 +389,95 @@ export default function KnowledgeGraph() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="search..."
-            className="px-3 py-1.5 rounded border text-xs outline-none transition-colors"
+            placeholder="search graph..."
+            className="px-3 py-1.5 rounded-lg text-xs outline-none transition-all"
             style={{
-              width: 180,
-              background: dark ? 'rgba(20,20,20,0.8)' : 'rgba(255,255,255,0.8)',
-              backdropFilter: 'blur(12px)',
-              borderColor: dark ? '#222' : '#ddd',
-              color: dark ? '#888' : '#555',
+              width: 190,
+              ...glassStyle,
+              color: dark ? '#b0b8c4' : '#444',
+              caretColor: dark ? '#58a6ff' : '#3c64b4',
             }}
           />
         </div>
 
-        {/* View toggle — top-right area, above stats */}
+        {/* View toggle — frosted glass */}
         <div
           className="absolute top-3 right-5 z-10 flex items-center gap-1"
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
           <button
             onClick={() => setViewMode('notes')}
-            className="px-2.5 py-1 rounded border text-[10px] tracking-wider uppercase transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] tracking-wider uppercase transition-all"
             style={toggleBtnStyle(viewMode === 'notes')}
           >
             Notes
           </button>
           <button
             onClick={() => setViewMode('concepts')}
-            className="px-2.5 py-1 rounded border text-[10px] tracking-wider uppercase transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] tracking-wider uppercase transition-all"
             style={toggleBtnStyle(viewMode === 'concepts')}
           >
             Concepts
           </button>
         </div>
 
-        {/* Stats — below toggle */}
+        {/* Stats */}
         {nodes.length > 0 && (
           <div
             className="absolute top-10 right-5 z-10 text-[10px] tracking-wider uppercase"
-            style={{ color: dark ? '#2a2a2a' : '#ccc', fontFamily: 'var(--font-mono, monospace)' }}
+            style={{
+              color: dark ? 'rgba(139, 148, 158, 0.5)' : 'rgba(100, 100, 120, 0.5)',
+              fontFamily: 'var(--font-mono, monospace)',
+            }}
           >
             {nodes.length} {viewMode === 'concepts' ? 'concepts' : 'nodes'} &middot; {edges.length} edges
           </div>
         )}
 
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
             <div className="flex flex-col items-center gap-4">
               <div className="relative w-12 h-12">
                 <div
                   className="absolute inset-0 rounded-full animate-ping"
-                  style={{ background: dark ? 'rgba(100,120,130,0.15)' : 'rgba(100,120,130,0.1)' }}
+                  style={{ background: dark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(60, 100, 180, 0.08)' }}
                 />
                 <div
                   className="absolute inset-2 rounded-full animate-pulse"
-                  style={{ background: dark ? 'rgba(100,120,130,0.25)' : 'rgba(100,120,130,0.15)' }}
+                  style={{ background: dark ? 'rgba(88, 166, 255, 0.2)' : 'rgba(60, 100, 180, 0.12)' }}
                 />
                 <div
                   className="absolute inset-4 rounded-full"
-                  style={{ background: dark ? '#4a6670' : '#7a9aa8' }}
+                  style={{ background: dark ? '#58a6ff' : '#3c64b4' }}
                 />
               </div>
-              <span className="text-[11px] tracking-widest uppercase" style={{ color: dark ? '#333' : '#aaa' }}>
+              <span
+                className="text-[11px] tracking-widest uppercase"
+                style={{ color: dark ? 'rgba(139, 148, 158, 0.4)' : 'rgba(100, 100, 120, 0.5)' }}
+              >
                 {viewMode === 'concepts' ? 'mapping concepts' : 'mapping connections'}
               </span>
             </div>
           </div>
         ) : nodes.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center" style={{ background: bg }}>
             <div className="text-center max-w-xs">
               <div className="mb-6 relative mx-auto" style={{ width: 80, height: 80 }}>
                 <svg width="80" height="80" viewBox="0 0 80 80">
-                  <circle cx="20" cy="25" r="3" fill={dark ? '#2a2a2a' : '#ccc'} opacity="0.6" />
-                  <circle cx="55" cy="18" r="2" fill={dark ? '#2a2a2a' : '#ccc'} opacity="0.4" />
-                  <circle cx="40" cy="50" r="4" fill={dark ? '#2a2a2a' : '#ccc'} opacity="0.5" />
-                  <circle cx="65" cy="55" r="2.5" fill={dark ? '#2a2a2a' : '#ccc'} opacity="0.3" />
-                  <line x1="20" y1="25" x2="40" y2="50" stroke={dark ? '#1a1a1a' : '#ddd'} strokeWidth="0.5" />
-                  <line x1="55" y1="18" x2="40" y2="50" stroke={dark ? '#1a1a1a' : '#ddd'} strokeWidth="0.5" />
-                  <line x1="40" y1="50" x2="65" y2="55" stroke={dark ? '#1a1a1a' : '#ddd'} strokeWidth="0.5" />
+                  {/* Constellation empty state */}
+                  <circle cx="20" cy="25" r="2" fill={dark ? '#58a6ff' : '#3c64b4'} opacity="0.3" />
+                  <circle cx="55" cy="18" r="1.5" fill={dark ? '#b392f0' : '#6a5acd'} opacity="0.25" />
+                  <circle cx="40" cy="50" r="2.5" fill={dark ? '#79c0ff' : '#4a80c4'} opacity="0.35" />
+                  <circle cx="65" cy="55" r="1.5" fill={dark ? '#c9d1d9' : '#666'} opacity="0.2" />
+                  <line x1="20" y1="25" x2="40" y2="50" stroke={dark ? '#58a6ff' : '#3c64b4'} strokeWidth="0.4" opacity="0.15" />
+                  <line x1="55" y1="18" x2="40" y2="50" stroke={dark ? '#b392f0' : '#6a5acd'} strokeWidth="0.4" opacity="0.12" />
+                  <line x1="40" y1="50" x2="65" y2="55" stroke={dark ? '#79c0ff' : '#4a80c4'} strokeWidth="0.4" opacity="0.1" />
                 </svg>
               </div>
-              <p className="text-xs mb-1" style={{ color: dark ? '#444' : '#999' }}>
+              <p className="text-xs mb-1" style={{ color: dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.6)' }}>
                 {viewMode === 'concepts' ? 'no concepts yet' : 'no connections yet'}
               </p>
-              <p className="text-[11px]" style={{ color: dark ? '#2a2a2a' : '#bbb' }}>
+              <p className="text-[11px]" style={{ color: dark ? 'rgba(139,148,158,0.3)' : 'rgba(100,100,120,0.4)' }}>
                 {emptyMessage}
               </p>
             </div>
@@ -440,33 +495,47 @@ export default function KnowledgeGraph() {
             style={{ userSelect: 'none', background: bg }}
           >
             <defs>
-              {/* Glow filter for hovered nodes */}
-              <filter id="node-glow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
+              {/* Per-node radial glow gradients are created inline, but we define reusable filters here */}
+
+              {/* Hovered node: strong outer glow */}
+              <filter id="glow-strong" x="-200%" y="-200%" width="500%" height="500%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur1" />
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
+                <feMerge>
+                  <feMergeNode in="blur1" />
+                  <feMergeNode in="blur2" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              {/* Normal node: subtle ambient glow */}
+              <filter id="glow-soft" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
 
-              {/* Soft glow for all nodes */}
-              <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
+              {/* Neighbor node: medium glow */}
+              <filter id="glow-medium" x="-150%" y="-150%" width="400%" height="400%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
 
-              {/* Ambient glow halo */}
-              <radialGradient id="halo-dark">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.06" />
-                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="halo-light">
-                <stop offset="0%" stopColor="#000000" stopOpacity="0.04" />
-                <stop offset="100%" stopColor="#000000" stopOpacity="0" />
-              </radialGradient>
+              {/* Pulsing glow ring for hovered node (animated via glowPhase) */}
+              <filter id="glow-pulse" x="-300%" y="-300%" width="700%" height="700%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur1" />
+                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur2" />
+                <feMerge>
+                  <feMergeNode in="blur1" />
+                  <feMergeNode in="blur2" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
             {/* Background rect for pan detection */}
@@ -478,48 +547,49 @@ export default function KnowledgeGraph() {
               fill="transparent"
             />
 
-            {/* Edges — curved paths */}
+            {/* Edges — straight thin lines */}
             {edges.map((edge, i) => {
               const s = nodeMap[edge.source]
               const t = nodeMap[edge.target]
               if (!s || !t) return null
 
-              const bothMatch = matchesSearch(s) && matchesSearch(t)
-              if (searchQuery.trim() && !bothMatch) return null
+              const sMatches = matchesSearch(s)
+              const tMatches = matchesSearch(t)
+              const hasSearch = searchQuery.trim()
+
+              // When searching, hide edges between non-matching nodes
+              if (hasSearch && !sMatches && !tMatches) return null
 
               const isHighlighted = hoveredNode && (edge.source === hoveredNode || edge.target === hoveredNode)
-              const baseOpacity = 0.04 + edge.weight * 0.12
-              const opacity = isHighlighted ? 0.35 : baseOpacity
-              const width = isHighlighted ? 1.5 : 0.5 + edge.weight * 0.5
+              const dimmedByHover = hoveredNode && !isHighlighted
+              const dimmedBySearch = hasSearch && (!sMatches || !tMatches)
+
+              let opacity
+              if (isHighlighted) {
+                opacity = 0.4
+              } else if (dimmedByHover) {
+                opacity = 0.02
+              } else if (dimmedBySearch) {
+                opacity = 0.03
+              } else {
+                opacity = 0.06 + edge.weight * 0.09
+              }
+
+              const width = isHighlighted ? 0.8 : 0.3 + edge.weight * 0.3
 
               return (
-                <path
+                <line
                   key={`e-${i}`}
-                  d={edgePath(s.x, s.y, t.x, t.y)}
-                  fill="none"
-                  stroke={edgeColor}
+                  x1={s.x}
+                  y1={s.y}
+                  x2={t.x}
+                  y2={t.y}
+                  stroke={isHighlighted ? (dark ? '#79c0ff' : '#4a80c4') : edgeBaseColor}
                   strokeWidth={width}
                   strokeOpacity={opacity}
                   style={{
-                    transition: settled ? 'stroke-opacity 0.3s, stroke-width 0.3s' : undefined,
+                    transition: settled ? 'stroke-opacity 0.4s ease, stroke-width 0.4s ease' : undefined,
                   }}
-                />
-              )
-            })}
-
-            {/* Node halos — ambient glow circles behind each node */}
-            {nodes.map(node => {
-              const matches = matchesSearch(node)
-              if (searchQuery.trim() && !matches) return null
-              const r = nodeRadius(node)
-              return (
-                <circle
-                  key={`halo-${node.id}`}
-                  cx={node.x}
-                  cy={node.y}
-                  r={r * 4}
-                  fill={`url(#halo-${dark ? 'dark' : 'light'})`}
-                  style={{ pointerEvents: 'none' }}
                 />
               )
             })}
@@ -528,32 +598,56 @@ export default function KnowledgeGraph() {
             {nodes.map(node => {
               const matches = matchesSearch(node)
               const isHovered = hoveredNode === node.id
-              const isNeighbor = hoveredNode && edges.some(e =>
-                (e.source === hoveredNode && e.target === node.id) ||
-                (e.target === hoveredNode && e.source === node.id)
-              )
+              const isConnected = connectedSet.has(node.id)
               const isConcept = viewMode === 'concepts'
               const color = isConcept
                 ? getConceptColor(node.mastery_pct, dark)
-                : getNodeColor(node.degree)
+                : getNodeColor(node.degree, dark)
               const r = nodeRadius(node)
-              const displayR = isHovered ? r * 1.6 : r
+              const hasSearch = searchQuery.trim()
 
-              let opacity = 1
-              if (searchQuery.trim() && !matches) opacity = 0.08
-              else if (hoveredNode && !isHovered && !isNeighbor) opacity = 0.25
+              // Determine opacity
+              let opacity
+              if (hasSearch && !matches) {
+                opacity = 0.04
+              } else if (hoveredNode) {
+                if (isHovered) {
+                  opacity = 1
+                } else if (isConnected) {
+                  opacity = 0.9
+                } else {
+                  opacity = 0.06
+                }
+              } else if (hasSearch && matches) {
+                opacity = 1
+              } else {
+                opacity = 0.85
+              }
 
-              // In concepts view, always show labels; in notes view, only for hover / high-degree
-              const showLabel = isConcept || isHovered || node.degree >= 4
+              // Determine filter
+              let filter
+              if (isHovered) {
+                filter = 'url(#glow-pulse)'
+              } else if (isConnected && hoveredNode) {
+                filter = 'url(#glow-medium)'
+              } else {
+                filter = 'url(#glow-soft)'
+              }
+
+              // Show label: on hover always, on high-degree or concepts view when no hover
+              const showLabel = isHovered || (isConcept && !hoveredNode && node.degree >= 1) || (!hoveredNode && node.degree >= 5)
               const nodeDisplayName = isConcept ? (node.label || 'unnamed') : (node.title || 'untitled')
+
+              // Glow ring radius for hovered node (pulsing)
+              const pulseR = r + 4 + glowPhase * 6
 
               return (
                 <g
                   key={`n-${node.id}`}
                   style={{
-                    cursor: 'pointer',
+                    cursor: isConcept ? 'default' : 'pointer',
                     opacity,
-                    transition: settled ? 'opacity 0.3s' : undefined,
+                    transition: settled ? 'opacity 0.4s ease' : undefined,
                   }}
                   onMouseDown={e => handleNodeMouseDown(e, node.id)}
                   onMouseEnter={() => setHoveredNode(node.id)}
@@ -564,76 +658,114 @@ export default function KnowledgeGraph() {
                       if (!isConcept) {
                         navigate(`/notes/${node.id}`)
                       }
-                      // Concepts view: click just highlights connected nodes (hover already does this)
                     }
                   }}
                 >
-                  {/* Core dot */}
+                  {/* Outer halo — subtle radial glow */}
                   <circle
                     cx={node.x}
                     cy={node.y}
-                    r={displayR}
+                    r={r * 5}
                     fill={color}
-                    filter={isHovered ? 'url(#node-glow)' : 'url(#soft-glow)'}
-                    style={{ transition: settled ? 'r 0.2s ease' : undefined }}
-                  />
-
-                  {/* Inner bright spot */}
-                  <circle
-                    cx={node.x - r * 0.2}
-                    cy={node.y - r * 0.2}
-                    r={displayR * 0.35}
-                    fill="white"
-                    opacity={isHovered ? 0.25 : 0.1}
+                    opacity={isHovered ? 0.08 : 0.03}
                     style={{ pointerEvents: 'none' }}
                   />
 
-                  {/* Label */}
+                  {/* Pulsing glow ring for hovered node */}
+                  {isHovered && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={pulseR}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={1}
+                      opacity={0.2 + glowPhase * 0.25}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
+                  {/* Core luminous dot */}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={isHovered ? r * 1.5 : r}
+                    fill={color}
+                    filter={filter}
+                    style={{ transition: settled ? 'r 0.2s ease' : undefined }}
+                  />
+
+                  {/* Bright center spot — gives the star/luminous feel */}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={isHovered ? r * 0.5 : r * 0.35}
+                    fill="white"
+                    opacity={isHovered ? 0.6 : 0.25}
+                    style={{ pointerEvents: 'none' }}
+                  />
+
+                  {/* Hit area — invisible larger circle for easier hovering */}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={Math.max(r * 3, 12)}
+                    fill="transparent"
+                    style={{ cursor: isConcept ? 'default' : 'pointer' }}
+                  />
+
+                  {/* Label — clean sans-serif, appears on hover or for high-degree */}
                   {showLabel && (
                     <text
                       x={node.x}
-                      y={node.y + displayR + (isHovered ? 16 : 12)}
+                      y={node.y + (isHovered ? r * 1.5 : r) + 14}
                       textAnchor="middle"
                       fontSize={isHovered ? 11 : 8}
-                      fill={isHovered ? hoverLabelColor : labelColor}
+                      fill={
+                        isHovered
+                          ? (dark ? '#c9d1d9' : '#333')
+                          : (dark ? 'rgba(139,148,158,0.5)' : 'rgba(100,100,120,0.5)')
+                      }
                       style={{
                         pointerEvents: 'none',
-                        fontFamily: 'var(--font-sans, system-ui)',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
                         fontWeight: isHovered ? 500 : 400,
                         letterSpacing: '0.02em',
                       }}
                     >
-                      {isHovered ? nodeDisplayName : truncate(nodeDisplayName, 14)}
+                      {nodeDisplayName}
                     </text>
                   )}
                 </g>
               )
             })}
 
-            {/* Hover detail — tooltip above node */}
+            {/* Hover tooltip — metadata above node */}
             {hoveredNode && (() => {
               const node = nodeMap[hoveredNode]
               if (!node) return null
-              const r = nodeRadius(node) * 1.6
+              const r = nodeRadius(node) * 1.5
               const isConcept = viewMode === 'concepts'
+
+              const tooltipColor = dark ? 'rgba(139,148,158,0.6)' : 'rgba(100,100,120,0.7)'
 
               if (isConcept) {
                 const mastery = node.mastery_pct != null ? `${Math.round(node.mastery_pct)}% mastery` : 'no mastery data'
-                const notes = `${node.note_count || 0} note${(node.note_count || 0) !== 1 ? 's' : ''}`
+                const noteCount = `${node.note_count || 0} note${(node.note_count || 0) !== 1 ? 's' : ''}`
                 return (
                   <text
                     x={node.x}
-                    y={node.y - r - 8}
+                    y={node.y - r - 10}
                     textAnchor="middle"
                     fontSize={8}
-                    fill={dark ? '#444' : '#aaa'}
+                    fill={tooltipColor}
                     style={{
                       pointerEvents: 'none',
                       fontFamily: 'var(--font-mono, monospace)',
-                      letterSpacing: '0.08em',
+                      letterSpacing: '0.06em',
                     }}
                   >
-                    {mastery}, {notes}
+                    {mastery} · {noteCount}
                   </text>
                 )
               }
@@ -641,14 +773,14 @@ export default function KnowledgeGraph() {
               return (
                 <text
                   x={node.x}
-                  y={node.y - r - 8}
+                  y={node.y - r - 10}
                   textAnchor="middle"
                   fontSize={8}
-                  fill={dark ? '#444' : '#aaa'}
+                  fill={tooltipColor}
                   style={{
                     pointerEvents: 'none',
                     fontFamily: 'var(--font-mono, monospace)',
-                    letterSpacing: '0.08em',
+                    letterSpacing: '0.06em',
                   }}
                 >
                   {node.degree} connection{node.degree !== 1 ? 's' : ''}

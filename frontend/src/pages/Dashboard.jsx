@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap, Lightbulb, TrendingUp, Timer, BarChart3, Play, HelpCircle, Square, X, Users } from 'lucide-react'
+import { Flame, Brain, FileText, Clock, Layers, AlertTriangle, BookOpen, Calendar, CheckCircle, ChevronRight, ChevronDown, RotateCcw, StickyNote, ArrowRight, Zap, Lightbulb, TrendingUp, Timer, BarChart3, Play, HelpCircle, Square, X, Users, AlertCircle, Loader2 } from 'lucide-react'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import { useTheme } from '../contexts/ThemeContext'
@@ -48,6 +48,101 @@ function QuickAction({ icon: Icon, label, sublabel, onClick, dark }) {
   )
 }
 
+function KnowledgeGapsWidget({ gaps: initialGaps, dark, cardClasses, navigate }) {
+  const [generating, setGenerating] = useState({})
+  // Track created notes: key -> { note_id, note_title }
+  const [created, setCreated] = useState({})
+
+  // Optimistically remove created concepts from gaps
+  const gaps = initialGaps.map(gap => {
+    const stillMissing = gap.missing.filter(c => !created[`${gap.note_id}:${c}`])
+    if (stillMissing.length === gap.missing.length) return gap
+    const newKnown = gap.known + (gap.missing.length - stillMissing.length)
+    const newCoverage = gap.total > 0 ? Math.round(newKnown / gap.total * 1000) / 10 : 100
+    return { ...gap, missing: stillMissing, known: newKnown, coverage_pct: newCoverage }
+  }).filter(gap => gap.coverage_pct < 100)
+
+  const handleGenerate = async (concept, noteId) => {
+    const key = `${noteId}:${concept}`
+    setGenerating(g => ({ ...g, [key]: true }))
+    try {
+      const result = await api.post('/knowledge/generate-prerequisite', {
+        concept,
+        source_note_id: noteId,
+      })
+      if (result?.note_id) {
+        setCreated(prev => ({ ...prev, [key]: result }))
+      }
+    } catch {
+    } finally {
+      setGenerating(g => ({ ...g, [key]: false }))
+    }
+  }
+
+  if (gaps.length === 0) return null
+
+  return (
+    <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <AlertCircle size={13} style={{ color: dark ? '#c4a759' : '#8b7a3d' }} />
+        <p className="text-[10px] uppercase tracking-wider text-text-muted">knowledge gaps</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {gaps.map(gap => (
+          <div key={gap.note_id}
+            className="flex flex-col gap-1.5 p-2.5 rounded-lg transition-colors"
+            style={{
+              background: dark ? '#0e0e0e' : '#f5f3ee',
+              border: `1px solid ${dark ? '#1a1a1a' : '#e8e5de'}`,
+            }}>
+            <div className="flex items-center justify-between cursor-pointer"
+              onClick={() => navigate(`/notes/${gap.note_id}`)}>
+              <span className="text-[12px] font-medium truncate" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>
+                {gap.note_title || 'Untitled'}
+              </span>
+              <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: dark ? '#555' : '#999' }}>
+                {gap.known}/{gap.total}
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: dark ? '#1a1a1a' : '#e0ddd6' }}>
+              <div className="h-full rounded-full transition-all" style={{
+                width: `${gap.coverage_pct}%`,
+                background: gap.coverage_pct >= 60 ? '#c4a759' : gap.coverage_pct >= 30 ? '#d97706' : '#ef4444',
+              }} />
+            </div>
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {gap.missing.slice(0, 3).map(concept => {
+                const key = `${gap.note_id}:${concept}`
+                return (
+                  <button key={concept}
+                    onClick={() => !generating[key] && handleGenerate(concept, gap.note_id)}
+                    disabled={generating[key]}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                    style={{
+                      color: dark ? '#c4a759' : '#8b7a3d',
+                      background: dark ? 'rgba(196,167,89,0.06)' : 'rgba(196,167,89,0.08)',
+                      opacity: generating[key] ? 0.6 : 1,
+                    }}
+                    onMouseEnter={e => { if (!generating[key]) e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.12)' : 'rgba(196,167,89,0.15)' }}
+                    onMouseLeave={e => e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.06)' : 'rgba(196,167,89,0.08)'}>
+                    {generating[key] ? <Loader2 size={9} className="animate-spin" /> : <Zap size={9} />}
+                    {concept}
+                  </button>
+                )
+              })}
+              {gap.missing.length > 3 && (
+                <span className="text-[10px] px-1 py-0.5" style={{ color: dark ? '#333' : '#bbb' }}>
+                  +{gap.missing.length - 3} more
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const PLUGIN_WIDGET_MAP = { pomodoro_insights: PomodoroInsightsWidget }
 
 export default function Dashboard() {
@@ -69,6 +164,7 @@ export default function Dashboard() {
   const [nudges, setNudges] = useState([])
   const [reviewStats, setReviewStats] = useState(null)
   const [socialFeed, setSocialFeed] = useState([])
+  const [knowledgeGaps, setKnowledgeGaps] = useState([])
   const [dismissedNudges, setDismissedNudges] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('neuronic_dismissed_nudges') || '[]') } catch { return [] }
   })
@@ -107,6 +203,7 @@ export default function Dashboard() {
     api.get('/dashboard/habits').then(setHabits).catch(() => {})
     api.post('/dashboard/generate-nudges').catch(() => {})
     api.get('/social/feed?limit=5').then(data => setSocialFeed(data || [])).catch(() => {})
+    api.get('/knowledge/gaps').then(data => setKnowledgeGaps(data?.gaps || [])).catch(() => {})
     api.get('/notifications').then(data => {
       const studyNudges = (data.notifications || []).filter(n => n.type === 'study_nudge' && !n.is_read)
       setNudges(studyNudges)
@@ -533,6 +630,11 @@ export default function Dashboard() {
               </div>
             )
           })()}
+
+          {/* Knowledge Gaps */}
+          {knowledgeGaps.length > 0 && (
+            <KnowledgeGapsWidget gaps={knowledgeGaps} dark={dark} cardClasses={cardClasses} navigate={navigate} />
+          )}
 
           {/* Activity Heatmap */}
           <div className={`rounded-xl border p-4 mb-6 ${cardClasses}`}>

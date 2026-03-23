@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download, Share2, Link2, Link2Off, Copy, HelpCircle, Zap, Play, Scissors } from 'lucide-react'
+import { ArrowLeft, MessageSquare, X, Check, Loader2, Highlighter, Search, Layers, FileText, BookOpen, Tag, Download, Share2, Link2, Link2Off, Copy, HelpCircle, Zap, Play, Scissors, ChevronDown, CheckCircle, Circle, ArrowRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { getCached, setCache, updateCacheMessages } from '../lib/noteThreadCache'
 import { useChat } from '../hooks/useChat'
@@ -291,6 +291,168 @@ function ShareMenu({ shareToken, shareMenuOpen, shareCopied, onShare, onUnshare,
 }
 
 /** Inline study context bar — shows connected study materials + quick actions */
+function PrerequisiteBanner({ noteId, readiness, setReadiness, dark, navigate, onNoteCreated }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(`prereq_banner_dismissed_${noteId}`) === 'true' } catch { return false }
+  })
+  const [expanded, setExpanded] = useState(() => readiness && readiness.coverage_pct < 70)
+  const [generating, setGenerating] = useState({})
+
+  useEffect(() => {
+    if (readiness) setExpanded(readiness.coverage_pct < 70)
+  }, [readiness])
+
+  if (!readiness || readiness.total === 0 || readiness.coverage_pct >= 100 || dismissed) return null
+
+  const prereqs = readiness.prerequisites || []
+  const uncoveredPrereqs = prereqs.filter(p => !p.known && !p.suggested_note_id && !generating[p.concept])
+  const anyGenerating = Object.values(generating).some(Boolean)
+
+  const markCreated = (concept, result) => {
+    setReadiness(prev => {
+      if (!prev) return prev
+      const updated = prev.prerequisites.map(p =>
+        p.concept === concept && !p.known
+          ? { ...p, known: true, created: true, suggested_note_id: result.note_id, suggested_note_title: result.note_title }
+          : p
+      )
+      const newKnown = updated.filter(p => p.known).length
+      return {
+        ...prev,
+        prerequisites: updated,
+        known: newKnown,
+        coverage_pct: prev.total > 0 ? Math.round(newKnown / prev.total * 1000) / 10 : 100,
+      }
+    })
+  }
+
+  const handleGenerate = async (concept) => {
+    setGenerating(g => ({ ...g, [concept]: true }))
+    try {
+      const result = await api.post('/knowledge/generate-prerequisite', {
+        concept,
+        source_note_id: parseInt(noteId),
+      })
+      if (result?.note_id) {
+        markCreated(concept, result)
+        if (onNoteCreated) onNoteCreated()
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setGenerating(g => ({ ...g, [concept]: false }))
+    }
+  }
+
+  const handleCreateAll = (e) => {
+    e.stopPropagation()
+    uncoveredPrereqs.forEach(p => handleGenerate(p.concept))
+  }
+
+  return (
+    <div className="mb-3 rounded-lg overflow-hidden transition-all" style={{
+      background: dark ? 'rgba(196,167,89,0.04)' : 'rgba(196,167,89,0.06)',
+      border: `1px solid ${dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.25)'}`,
+      animation: 'slideDown 0.2s ease-out',
+    }}>
+      <style>{`@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <div className="flex items-center justify-between px-3 py-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-center gap-2">
+          <BookOpen size={13} style={{ color: dark ? '#c4a759' : '#8b7a3d' }} />
+          <span className="text-[12px] font-medium" style={{ color: dark ? '#c4a759' : '#8b7a3d' }}>
+            {readiness.known}/{readiness.total} prerequisites covered
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {uncoveredPrereqs.length > 1 && (
+            <button onClick={handleCreateAll}
+              disabled={anyGenerating}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+              style={{
+                color: dark ? '#c4a759' : '#8b7a3d',
+                background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)',
+                opacity: anyGenerating ? 0.5 : 1,
+              }}
+              onMouseEnter={e => { if (!anyGenerating) e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.18)' }}
+              onMouseLeave={e => e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)'}>
+              {anyGenerating ? <><Loader2 size={10} className="animate-spin" /> creating...</> : <>create all <Zap size={10} /></>}
+            </button>
+          )}
+          <button onClick={e => { e.stopPropagation(); setDismissed(true); localStorage.setItem(`prereq_banner_dismissed_${noteId}`, 'true') }}
+            className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            style={{ color: dark ? '#555' : '#999' }}>
+            <X size={12} />
+          </button>
+          <ChevronDown size={13} style={{
+            color: dark ? '#555' : '#999',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0)',
+            transition: 'transform 0.2s',
+          }} />
+        </div>
+      </div>
+      {expanded && (
+        <div className="px-3 pb-2.5 flex flex-col gap-1">
+          {prereqs.map((p, i) => (
+            <div key={i} className="flex items-center gap-2 text-[11px] py-0.5">
+              {p.known ? (
+                <>
+                  <CheckCircle size={12} style={{ color: '#4ade80', opacity: 0.7 }} />
+                  <span style={{ color: dark ? 'rgba(74,222,128,0.7)' : '#3a9960' }}>{p.concept}</span>
+                  {p.created && p.suggested_note_id ? (
+                    <button onClick={() => navigate(`/notes/${p.suggested_note_id}`)}
+                      className="flex items-center gap-0.5 ml-auto px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                      style={{
+                        color: dark ? 'rgba(74,222,128,0.7)' : '#3a9960',
+                        background: dark ? 'rgba(74,222,128,0.06)' : 'rgba(74,222,128,0.08)',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.15)'}
+                      onMouseLeave={e => e.currentTarget.style.background = dark ? 'rgba(74,222,128,0.06)' : 'rgba(74,222,128,0.08)'}>
+                      open <ArrowRight size={10} />
+                    </button>
+                  ) : p.mastery_pct != null ? (
+                    <span style={{ color: dark ? '#333' : '#bbb', fontSize: 10 }}>{Math.round(p.mastery_pct)}%</span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Circle size={12} style={{ color: dark ? '#c4a759' : '#8b7a3d', opacity: 0.6 }} />
+                  <span style={{ color: dark ? '#c4a759' : '#8b7a3d' }}>{p.concept}</span>
+                  {p.suggested_note_id ? (
+                    <button onClick={() => navigate(`/notes/${p.suggested_note_id}`)}
+                      className="flex items-center gap-0.5 ml-auto px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                      style={{
+                        color: dark ? '#c4a759' : '#8b7a3d',
+                        background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.18)'}
+                      onMouseLeave={e => e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)'}>
+                      learn <ArrowRight size={10} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => !generating[p.concept] && handleGenerate(p.concept)}
+                      disabled={generating[p.concept]}
+                      className="flex items-center gap-0.5 ml-auto px-1.5 py-0.5 rounded text-[10px] transition-colors"
+                      style={{
+                        color: dark ? '#c4a759' : '#8b7a3d',
+                        background: dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)',
+                        opacity: generating[p.concept] ? 0.6 : 1,
+                      }}
+                      onMouseEnter={e => { if (!generating[p.concept]) e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.15)' : 'rgba(196,167,89,0.18)' }}
+                      onMouseLeave={e => e.currentTarget.style.background = dark ? 'rgba(196,167,89,0.08)' : 'rgba(196,167,89,0.1)'}>
+                      {generating[p.concept] ? <><Loader2 size={10} className="animate-spin" /> creating...</> : <>create <Zap size={10} /></>}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StudyContextBar({ noteId, noteTitle, studyContext, readiness, dark, onGenerateCards, onGenerateQuiz, onStartFocus }) {
   if (!studyContext) return null
   const { totalCards, dueCards, quizCount } = studyContext
@@ -727,6 +889,25 @@ export default function NoteEdit() {
       setStudyContext({ totalCards: cards.length, dueCards: dueCards.length, quizCount: quizList.length })
     })
     api.get(`/knowledge/readiness/${id}`).then(setReadiness).catch(() => {})
+  }, [id])
+
+  // Re-fetch readiness when page regains focus (handles deleted prereq notes)
+  useEffect(() => {
+    let timer
+    const refresh = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        api.get(`/knowledge/readiness/${id}`).then(setReadiness).catch(() => {})
+      }, 300)
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [id])
 
   // Persist vim preference
@@ -1397,6 +1578,9 @@ export default function NoteEdit() {
           }}
           onStartFocus={() => startFocus({ noteId: parseInt(id), noteTitle: note?.title || 'Untitled' })}
         />
+
+        <PrerequisiteBanner noteId={id} readiness={readiness} setReadiness={setReadiness} dark={dark} navigate={navigate}
+          onNoteCreated={() => api.get(`/notes/${id}/links`).then(setLinkedNotes).catch(() => {})} />
 
         {/* Main content area */}
         <div className="flex flex-1 min-h-0 gap-0">

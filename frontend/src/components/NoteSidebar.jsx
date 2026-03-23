@@ -213,12 +213,15 @@ const LinkedNoteCard = ({ link, onRemove, dark }) => {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-[#d4d4d4] truncate font-medium">{link.title}</p>
-          <p className="text-[10px] text-[#505050] truncate mt-1">{link.preview}</p>
+          <p className="text-xs truncate font-medium" style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>{link.title}</p>
+          <p className="text-[10px] truncate mt-1" style={{ color: dark ? '#505050' : '#999' }}>{link.preview}</p>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(link.link_id) }}
-          className="text-[#333333] hover:text-[#884444] transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100"
+          className="transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100"
+          style={{ color: dark ? '#333333' : '#ccc' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#884444'}
+          onMouseLeave={e => e.currentTarget.style.color = dark ? '#333333' : '#ccc'}
         >
           <X size={11} />
         </button>
@@ -286,6 +289,77 @@ const LookupCard = ({ lookup, expanded, onToggle, onDelete, dark }) => (
   </div>
 )
 
+const MiniGraph = ({ currentTitle, connections, dark }) => {
+  const width = 220
+  const height = 150
+  const cx = width / 2
+  const cy = height / 2
+  const radius = 52
+
+  const edgeColor = dark ? 'rgba(140,160,200,' : 'rgba(60,100,160,'
+  const nodeColor = dark ? 'rgba(140,160,200,' : 'rgba(60,100,160,'
+  const labelColor = dark ? '#444' : '#999'
+  const centerColor = dark ? '#8ba0c8' : '#5a80b0'
+  const titleColor = dark ? '#d4d4d4' : '#333'
+
+  const nodes = connections.slice(0, 8).map((conn, i) => {
+    const angle = (2 * Math.PI * i) / Math.min(connections.length, 8) - Math.PI / 2
+    return {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+      title: conn.title || 'Untitled',
+      strength: conn.strength,
+    }
+  })
+
+  return (
+    <svg width={width} height={height} className="mx-auto block" style={{ overflow: 'visible' }}>
+      {/* Edges */}
+      {nodes.map((node, i) => (
+        <line
+          key={`edge-${i}`}
+          x1={cx} y1={cy}
+          x2={node.x} y2={node.y}
+          stroke={`${edgeColor}${(0.1 + node.strength * 0.3).toFixed(2)})`}
+          strokeWidth={1}
+        />
+      ))}
+      {/* Outer nodes */}
+      {nodes.map((node, i) => (
+        <g key={`node-${i}`}>
+          <circle
+            cx={node.x} cy={node.y} r={4}
+            fill={`${nodeColor}${(0.2 + node.strength * 0.6).toFixed(2)})`}
+            stroke={`${nodeColor}0.15)`}
+            strokeWidth={1}
+          />
+          <text
+            x={node.x} y={node.y + 14}
+            textAnchor="middle"
+            fill={labelColor}
+            fontSize={8}
+            style={{ userSelect: 'none' }}
+          >
+            {node.title.length > 14 ? node.title.slice(0, 13) + '\u2026' : node.title}
+          </text>
+        </g>
+      ))}
+      {/* Center node */}
+      <circle cx={cx} cy={cy} r={7} fill={centerColor} opacity={0.8} />
+      <text
+        x={cx} y={cy + 18}
+        textAnchor="middle"
+        fill={titleColor}
+        fontSize={9}
+        fontWeight="500"
+        style={{ userSelect: 'none' }}
+      >
+        {(currentTitle || 'this note').length > 18 ? (currentTitle || 'this note').slice(0, 17) + '\u2026' : (currentTitle || 'this note')}
+      </text>
+    </svg>
+  )
+}
+
 const OutlineItem = ({ item }) => (
     <div style={{ paddingLeft: `${((item.level || 1) - 1) * 10}px` }}>
         <p className="text-[11px] text-[#d4d4d4] leading-relaxed">{item.text}</p>
@@ -324,6 +398,7 @@ export default function NoteSidebar({
   // User context
   user = null,
 }) {
+  const navigate = useNavigate()
   const chatScrollRef = useRef(null)
   const chatEndRef = useRef(null)
 
@@ -430,6 +505,7 @@ export default function NoteSidebar({
               <TabButton active={sidebarTab === 'links'} onClick={() => setSidebarTab('links')} count={linkedNotes.length}>
                 links
               </TabButton>
+              <TabButton active={sidebarTab === 'graph'} onClick={() => setSidebarTab('graph')}>graph</TabButton>
               <TabButton active={sidebarTab === 'insights'} onClick={() => setSidebarTab('insights')}>insights</TabButton>
               {isOwner && editSuggestions.length > 0 && (
                 <TabButton active={sidebarTab === 'suggestions'} onClick={() => setSidebarTab('suggestions')} count={editSuggestions.length}>
@@ -682,6 +758,113 @@ export default function NoteSidebar({
               </div>
             </div>
           )}
+        </div>
+      ) : sidebarTab === 'graph' ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in">
+          {(() => {
+            const linkedNoteIds = new Set(linkedNotes.map(l => l.note_id))
+            const connectedNotes = [
+              ...linkedNotes.map(l => ({
+                id: l.note_id,
+                title: l.title || 'Untitled',
+                preview: l.preview || '',
+                type: 'linked',
+                strength: 1,
+              })),
+              ...suggestions
+                .filter(s => !linkedNoteIds.has(s.id))
+                .map(s => ({
+                  id: s.id,
+                  title: s.title || 'Untitled',
+                  preview: s.preview || '',
+                  type: 'similar',
+                  strength: s.similarity || 0,
+                })),
+            ].sort((a, b) => b.strength - a.strength)
+
+            const currentTitle = content?.split('\n')?.[0]?.replace(/^#+\s*/, '') || 'this note'
+
+            return (
+              <>
+                {/* Mini force-directed graph */}
+                {connectedNotes.length > 0 && (
+                  <div className="rounded-lg p-3"
+                    style={{
+                      background: dark ? '#111111' : '#f5f3ee',
+                      border: `1px solid ${dark ? '#1c1c1c' : '#ddd9d0'}`,
+                    }}>
+                    <MiniGraph currentTitle={currentTitle} connections={connectedNotes} dark={dark} />
+                  </div>
+                )}
+
+                {/* Section header */}
+                <span className="text-[10px] uppercase tracking-wider block"
+                  style={{ color: dark ? '#444444' : '#999' }}>connected notes</span>
+
+                {connectedNotes.length === 0 ? (
+                  <EmptyState>no connections yet.<br />link notes or let AI find similar ones.</EmptyState>
+                ) : (
+                  <div className="space-y-2">
+                    {connectedNotes.map((note) => {
+                      const dotOpacity = note.strength >= 0.8 ? 0.9 : note.strength >= 0.5 ? 0.55 : 0.25
+                      const dotColor = dark
+                        ? `rgba(140,160,200,${dotOpacity})`
+                        : `rgba(60,100,160,${dotOpacity})`
+                      return (
+                        <div
+                          key={note.id}
+                          className="rounded-lg p-3 cursor-pointer group transition-colors"
+                          style={{
+                            background: dark
+                              ? 'linear-gradient(135deg, rgba(89,130,196,0.03) 0%, rgba(17,17,17,1) 60%)'
+                              : 'linear-gradient(135deg, rgba(60,100,180,0.04) 0%, #ffffff 60%)',
+                            border: `1px solid ${dark ? '#1c1c1c' : '#ddd9d0'}`,
+                          }}
+                          onClick={() => navigate(`/notes/${note.id}`)}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
+                              style={{ background: dotColor }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs truncate font-medium flex-1"
+                                  style={{ color: dark ? '#d4d4d4' : '#2a2a2a' }}>{note.title}</p>
+                                {note.type === 'linked' ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                    style={{
+                                      background: 'rgba(89,130,196,0.1)',
+                                      color: dark ? 'rgba(89,130,196,0.7)' : 'rgba(40,80,160,0.7)',
+                                      border: '1px solid rgba(89,130,196,0.15)',
+                                    }}>
+                                    linked
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                    style={{
+                                      background: 'rgba(130,196,89,0.08)',
+                                      color: dark ? 'rgba(130,196,89,0.6)' : 'rgba(60,140,40,0.7)',
+                                      border: '1px solid rgba(130,196,89,0.12)',
+                                    }}>
+                                    {Math.round(note.strength * 100)}%
+                                  </span>
+                                )}
+                              </div>
+                              {note.preview && (
+                                <p className="text-[10px] truncate mt-1"
+                                  style={{ color: dark ? '#505050' : '#999' }}>{note.preview}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       ) : sidebarTab === 'suggestions' ? (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
